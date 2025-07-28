@@ -1,0 +1,35 @@
+bad bad node — ForgotToBeNamed License v1.0  
+Copyright (c) 2025 Pip Doun
+
+This software is a signal in the void — a node in your graph of intention.  
+Use it. Shape it. Respect its authorship. Pass the thread forward.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy  
+of this software and associated documentation files (the “Software”), to deal in  
+the Software without restriction, including without limitation the rights to use,  
+copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the  
+Software, and to permit persons to whom the Software is furnished to do so,  
+subject to the following conditions:
+
+1. Attribution is Required.  
+   Any distribution of the Software, modified or unmodified, must include clear and visible attribution to the original authors. A mention in the README or equivalent documentation suffices. Keep the name "bad bad node" visible when reasonably possible.
+
+2. Don’t Misrepresent.  
+   You may not misrepresent the origin of the Software. Modified versions must be clearly marked as such. Do not imply endorsement by the original authors without permission.
+
+3. Respect the Graph.  
+   If your modification includes significant changes to the core architecture (e.g., node processing, connection system, UI/UX), you must document those changes clearly and consider opening a pull request to share improvements.
+
+4. No Warranty.  
+   This software is provided “as is”, without warranty of any kind, express or implied.  
+   In no event shall the authors be liable for any claim, damages, or other liability,  
+   whether in an action of contract, tort, or otherwise, arising from, out of, or in connection with the Software or the use or other dealings in the Software.
+
+Optional Plugin-Friendly Clause:  
+If you build nodes, extensions, or plugins for this editor, you are encouraged (but not required) to share them under open terms. A healthy ecosystem benefits us all.
+
+TL;DR  
+You can do almost anything — use it, fork it, remix it, commercialize it —  
+just give credit, don’t mislead others, and share upgrades when possible.
+
+License Version: 1.0
