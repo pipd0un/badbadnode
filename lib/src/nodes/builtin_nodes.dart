@@ -11,6 +11,9 @@ import 'fundamentals/operator_node.dart' show OperatorNode;
 import 'fundamentals/print_node.dart' show PrintNode;
 import 'fundamentals/sink_node.dart' show SinkNode;
 import 'fundamentals/string_node.dart' show StringNode;
+import 'fundamentals/object_node.dart' show ObjectNode;
+import 'fundamentals/getter_node.dart' show GetterNode;
+import 'fundamentals/setter_node.dart' show SetterNode;
 import 'node_definition.dart';
 
 void registerBuiltInNodes() {
@@ -23,5 +26,8 @@ void registerBuiltInNodes() {
     ..register(PrintNode())
     ..register(IfNode())
     ..register(SinkNode())
-    ..register(LoopNode());
+    ..register(LoopNode())
+    ..register(ObjectNode())
+    ..register(GetterNode())
+    ..register(SetterNode());
 }

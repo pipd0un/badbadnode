@@ -24,15 +24,14 @@ class ContextMenuHandler extends ConsumerWidget {
     final sel = ref.watch(selectedNodesProvider);
     final selNot = ref.read(selectedNodesProvider.notifier);
     final collNot = ref.read(collapsedNodesProvider.notifier);
-    final customKeys = CustomNodeRegistry().all.keys.toList()..sort();
-
+    
     MenuItem leaf(String t, Offset gPos, RenderBox box) => MenuItem(
-          label: '${t[0].toUpperCase()}${t.substring(1)}',
-          onSelected: () {
-            final local = box.globalToLocal(gPos);
-            graph.addNodeOfType(t, local.dx, local.dy);
-          },
-        );
+      label: '${t[0].toUpperCase()}${t.substring(1)}',
+      onSelected: () {
+        final local = box.globalToLocal(gPos);
+        graph.addNodeOfType(t, local.dx, local.dy);
+      },
+    );
 
     Future<void> backgroundMenu(Offset gPos) async {
       final box = canvasKey.currentContext?.findRenderObject() as RenderBox?;
@@ -40,37 +39,63 @@ class ContextMenuHandler extends ConsumerWidget {
 
       const primitives = ['number', 'string', 'list'];
       const ops = ['operator', 'comparator', 'if', 'loop'];
-      const dev = ['print', 'sink'];  
+      const dev = ['print', 'sink'];
+      const global = ['object', 'getter', 'setter'];
 
       final libs = <ContextMenuEntry>[
         MenuItem.submenu(
-            label: 'Primitives', items: primitives.map((t) => leaf(t, gPos, box)).toList()),
+          label: 'Primitives',
+          items: primitives.map((t) => leaf(t, gPos, box)).toList(),
+        ),
         MenuItem.submenu(
-            label: 'Basic Ops', items: ops.map((t) => leaf(t, gPos, box)).toList()),
+          label: 'Basic Ops',
+          items: ops.map((t) => leaf(t, gPos, box)).toList(),
+        ),
         MenuItem.submenu(
-            label: 'Dev', items: dev.map((t) => leaf(t, gPos, box)).toList()),
+          label: 'Dev',
+          items: dev.map((t) => leaf(t, gPos, box)).toList(),
+        ),
+        MenuItem.submenu(
+          label: 'Global',
+          items: global.map((t) => leaf(t, gPos, box)).toList(),
+        ),
       ];
-      if (customKeys.isNotEmpty) {
-        libs.add(MenuItem.submenu(
-            label: 'Custom', items: customKeys.map((t) => leaf(t, gPos, box)).toList()));
+
+      final grouped = CustomNodeRegistry().groupedByCategory;
+      for (final entry in grouped.entries) {
+        final nodes = entry.value..sort((a, b) => a.type.compareTo(b.type));
+        if (grouped.entries.isNotEmpty) libs.add(MenuDivider());
+        libs.add(
+          MenuItem.submenu(
+            label: entry.key,
+            items: nodes.map((n) => leaf(n.type, gPos, box)).toList(),
+          ),
+        );
       }
 
       await showContextMenu(
         context,
-        contextMenu: ContextMenu(position: gPos, entries: <ContextMenuEntry>[
-          const _Title(text: 'Foundation ©'),
-          MenuDivider(),
-          MenuItem(
+        contextMenu: ContextMenu(
+          position: gPos,
+          entries: <ContextMenuEntry>[
+            const _Title(text: 'Foundation ©'),
+            MenuDivider(),
+            MenuItem(
               icon: Icons.paste_rounded,
               label: 'Paste',
               onSelected: () {
                 final local = box.globalToLocal(gPos);
                 graph.pasteClipboard(local.dx, local.dy);
-              }),
-          MenuDivider(),
-          MenuItem.submenu(
-              icon: Icons.storage_rounded, label: 'Library', items: libs),
-        ]),
+              },
+            ),
+            MenuDivider(),
+            MenuItem.submenu(
+              icon: Icons.storage_rounded,
+              label: 'Library',
+              items: libs,
+            ),
+          ],
+        ),
       );
     }
 
@@ -83,21 +108,33 @@ class ContextMenuHandler extends ConsumerWidget {
 
       await showContextMenu(
         context,
-        contextMenu: ContextMenu(position: gPos, entries: <ContextMenuEntry>[
-          MenuItem(label: 'Cut', onSelected: () {
-            graph.cutNodes(sel);
-            selNot.clear();
-          }),
-          MenuItem(label: 'Copy', onSelected: () => graph.copyNodes(sel)),
-          MenuItem(label: 'Delete', onSelected: () {
-            for (final id in sel) {
-              graph.deleteNode(id);
-            }
-            selNot.clear();
-          }),
-          const MenuDivider(),
-          MenuItem(label: 'Collapse', onSelected: () => sel.forEach(collNot.toggle)),
-        ]),
+        contextMenu: ContextMenu(
+          position: gPos,
+          entries: <ContextMenuEntry>[
+            MenuItem(
+              label: 'Cut',
+              onSelected: () {
+                graph.cutNodes(sel);
+                selNot.clear();
+              },
+            ),
+            MenuItem(label: 'Copy', onSelected: () => graph.copyNodes(sel)),
+            MenuItem(
+              label: 'Delete',
+              onSelected: () {
+                for (final id in sel) {
+                  graph.deleteNode(id);
+                }
+                selNot.clear();
+              },
+            ),
+            const MenuDivider(),
+            MenuItem(
+              label: 'Collapse',
+              onSelected: () => sel.forEach(collNot.toggle),
+            ),
+          ],
+        ),
       );
     }
 
@@ -132,11 +169,15 @@ final class _Title extends ContextMenuEntry<Never> {
   const _Title({required this.text});
   @override
   Widget builder(BuildContext ctx, ContextMenuState _) => Padding(
-        padding: const EdgeInsets.all(8),
-        child: Center(
-          child: Text(text,
-              style: const TextStyle(
-                  color: Colors.blueGrey, fontWeight: FontWeight.bold)),
+    padding: const EdgeInsets.all(8),
+    child: Center(
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.blueGrey,
+          fontWeight: FontWeight.bold,
         ),
-      );
+      ),
+    ),
+  );
 }

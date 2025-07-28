@@ -61,14 +61,25 @@ class CustomNodeRegistry {
   factory CustomNodeRegistry() => _inst;
 
   final Map<String, NodeDefinition> _nodes = {};
+  final Map<String, String> _categories = {};
 
-  void register(NodeDefinition n) {
+  void register(NodeDefinition n, {String category = 'Others'}) {
     if (_nodes.containsKey(n.type)) {
       throw Exception('Node type "${n.type}" already registered');
     }
     _nodes[n.type] = n;
+    _categories[n.type] = category;
     NodeRegistry().register(n);
   }
 
   Map<String, NodeDefinition> get all => Map.unmodifiable(_nodes);
+  
+  Map<String, List<NodeDefinition>> get groupedByCategory {
+    final Map<String, List<NodeDefinition>> result = {};
+    for (final entry in _nodes.entries) {
+      final category = _categories[entry.key] ?? 'Others';
+      result.putIfAbsent(category, () => []).add(entry.value);
+    }
+    return result;
+  }
 }

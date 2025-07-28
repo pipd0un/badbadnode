@@ -37,7 +37,7 @@ fvm flutter run -d chrome
 Creating a new node is simple. Just extend `SimpleNode` and implement the logic:
 
 ```dart
-// lib/nodes/custom/factorial_node.dart
+// lib/custom_node/factorial_node.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -91,16 +91,14 @@ void registerCustomNodes() {
 ```
 ├── lib/
 │   ├── controller/       # Graph controller + clipboard, undo, JSON
-│   ├── core/             # Events, message hub
+│   ├── core/             # Events, message hub, Graph Evaluator
 │   ├── domain/           # Graph model + immutable mutations
-│   ├── engine/           # GraphEvaluator
 │   ├── models/           # Node, Connection
 │   ├── nodes/            # Built-in and custom nodes
 │   ├── painter/          # Canvas layers (grid, wires, selection, preview)
 │   ├── providers/        # Riverpod providers for UI and state
 │   ├── services/         # Asset and history services
-│   ├── widgets/          # UI components and layered canvas
-│   ├── util/             # Web shims and node registration
+│   └── widgets/          # UI components and layered canvas
 ├── test/                 # Performance and widget tests
 ├── tool/                 # Version bump tool
 └── pubspec.yaml

@@ -19,6 +19,11 @@ class GraphEvaluator {
 
   final Map<String, dynamic> _values = {};
   final Set<String> _ranInLoop      = {};
+  final Map<String, dynamic> _objects = {};
+
+  // ───────── key-value helpers ─────────
+  void setObject(String key, dynamic value) => _objects[key] = value;
+  dynamic getObject(String key)             => _objects[key];
 
   // ───────────────── helpers ─────────────────
   String _nodeIdOfPort(String portId) {
