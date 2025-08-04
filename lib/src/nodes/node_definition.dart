@@ -13,6 +13,13 @@ abstract class NodeDefinition {
   /// Unique identifier, e.g. `"number"`
   String get type;
 
+  /// Things that should run once when the graph starts like Object should be 'true'
+  bool get isInitializer => false;
+
+  ///  Commands are allowed to mutate evaluator state or do I/O.
+  ///  Pure nodes return data only.  Default = false for backwards-compat.
+  bool get isCommand => false;
+
   /// Ordered list of input / output names.
   List<String> get inputs;
   List<String> get outputs;

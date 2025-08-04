@@ -14,6 +14,8 @@ class ObjectNode extends SimpleNode {
   @override
   String get type => 'object';
   @override
+  bool get isInitializer => true;
+  @override
   List<String> get inputs => const ['key', 'value'];
   @override
   List<String> get outputs => const [];
@@ -22,7 +24,7 @@ class ObjectNode extends SimpleNode {
   Future run(Node node, GraphEvaluator ev) async {
     final k = ev.input(node, 'key');
     final v = ev.input(node, 'value');
-    if (k != null) {
+    if (k != null && ev.getObject(k.toString()) == null) {
       ev.setObject(k.toString(), v);
     }
     return v;

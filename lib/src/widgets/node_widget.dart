@@ -22,8 +22,7 @@ class NodeWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Sink node = pill without header ----------------------------------------
-    if (node.type == 'sink') {
+    if (node.type == 'sink' || node.type == 'note') {
       // body already contains the pill from SinkNode.buildWidget
       final body = NodeRegistry().lookup(node.type)!.buildWidget(node, ref);
       return RepaintBoundary(child: body);

@@ -14,6 +14,7 @@ export 'src/widgets/scene_builder.dart' show SceneBuilder;
 export 'src/widgets/toolbar.dart' show Toolbar;
 
 export 'src/providers/app_providers.dart' show scaffoldMessengerKeyProvider;
+export 'src/providers/asset_provider.dart' show assetFilesProvider;
 
 export 'src/services/snackbar_service.dart' show SnackbarService;
 

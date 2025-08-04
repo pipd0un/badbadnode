@@ -10,7 +10,6 @@ environment:
   flutter: ">=1.17.0"
 
 dependencies:
-  collection: ^1.19.1
   file_picker: ^10.2.0
   flutter:
     sdk: flutter

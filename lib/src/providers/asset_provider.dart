@@ -24,26 +24,3 @@ class AssetFilesNotifier extends StateNotifier<List<PlatformFile>> {
 
   void clear() => state = [];
 }
-
-final backgroundProvider = Provider<List<String>>((ref) {
-  return ref
-      .watch(assetFilesProvider)
-      .where((f) => f.name.startsWith('bg_') && f.extension == 'png')
-      .map((f) => f.name)
-      .toList();
-});
-
-final characterProvider = Provider<List<Map<String, String>>>((ref) {
-  return ref
-      .watch(assetFilesProvider)
-      .where((f) => f.name.endsWith('.png') && !f.name.startsWith('bg_'))
-      .map((f) => f.name.split('.').first.split('_'))
-      .where((parts) => parts.length == 3)
-      .map((parts) => {
-            'name': parts[0][0].toUpperCase() + parts[0].substring(1),
-            'cloth': parts[1][0].toUpperCase() + parts[1].substring(1),
-            'state': parts[2][0].toUpperCase() + parts[2].substring(1),
-            'filename': '${parts.join('_')}.png',
-          })
-      .toList();
-});

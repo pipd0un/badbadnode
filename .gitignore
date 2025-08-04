@@ -32,4 +32,5 @@ build/
 
 legacy_temp.txt
 to_legacy.py
+staged_changes.txt
 .todo/

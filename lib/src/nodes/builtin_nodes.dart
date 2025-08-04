@@ -6,6 +6,7 @@ import 'fundamentals/comparator_node.dart' show ComparatorNode;
 import 'fundamentals/if_node.dart' show IfNode;
 import 'fundamentals/list_node.dart' show ListNode;
 import 'fundamentals/loop_node.dart' show LoopNode;
+import 'fundamentals/note_node.dart' show NoteNode;
 import 'fundamentals/number_node.dart' show NumberNode;
 import 'fundamentals/operator_node.dart' show OperatorNode;
 import 'fundamentals/print_node.dart' show PrintNode;
@@ -24,6 +25,7 @@ void registerBuiltInNodes() {
     ..register(OperatorNode())
     ..register(ComparatorNode())
     ..register(PrintNode())
+    ..register(NoteNode())
     ..register(IfNode())
     ..register(SinkNode())
     ..register(LoopNode())

@@ -16,6 +16,8 @@ class PrintNode extends SimpleNode {
   @override
   String get type => 'print';
   @override
+  bool get isCommand => true;
+  @override
   List<String> get inputs => const ['in'];
   @override
   List<String> get outputs => const [];

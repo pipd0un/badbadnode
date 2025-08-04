@@ -12,10 +12,12 @@ class SetterNode extends SimpleNode {
 
   @override
   String get type => 'setter';
+  @override 
+  bool get isCommand => true;
   @override
   List<String> get inputs => const ['key', 'value'];
   @override
-  List<String> get outputs => const [];
+  List<String> get outputs => const ['then'];
 
   @override
   Future run(Node node, GraphEvaluator ev) async {

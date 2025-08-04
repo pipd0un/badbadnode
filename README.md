@@ -1,3 +1,5 @@
+![banner](assets/img/title.png)
+
 # Bad Bad Node — Node Editor for HerIndexOfErrors
 
 **bad bad node** is a procedural, extensible, and high-performance node-based visual editor built with Flutter. Designed for use cases such as ... .
@@ -162,3 +164,5 @@ Each `NodeDefinition` includes:
 ## 📃 License
 
 ForgotToBeNamed License © 2025
+
+![banner](assets/img/banner.jpeg)
