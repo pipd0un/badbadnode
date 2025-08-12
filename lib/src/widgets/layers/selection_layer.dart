@@ -1,5 +1,6 @@
 // lib/widgets/layers/selection_layer.dart
 
+import 'dart:ui' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,9 +20,9 @@ class SelectionLayer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selStart = ref.watch(selectionRectStartProvider);
+    final selStart   = ref.watch(selectionRectStartProvider);
     final selCurrent = ref.watch(selectionRectCurrentProvider);
-    final graph = ref.read(graphControllerProvider);
+    final graph      = ref.read(graphControllerProvider);
 
     void compute() {
       final s = ref.read(selectionRectStartProvider);
@@ -44,11 +45,15 @@ class SelectionLayer extends ConsumerWidget {
 
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
+      supportedDevices: {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+      },
       onPanStart: (d) {
         final box = canvasKey.currentContext?.findRenderObject() as RenderBox?;
         if (box == null) return;
         final local = box.globalToLocal(d.globalPosition);
-        ref.read(selectionRectStartProvider.notifier).state = local;
+        ref.read(selectionRectStartProvider.notifier).state   = local;
         ref.read(selectionRectCurrentProvider.notifier).state = local;
       },
       onPanUpdate: (d) {
@@ -61,7 +66,7 @@ class SelectionLayer extends ConsumerWidget {
       },
       onPanEnd: (_) {
         compute();
-        ref.read(selectionRectStartProvider.notifier).state = null;
+        ref.read(selectionRectStartProvider.notifier).state   = null;
         ref.read(selectionRectCurrentProvider.notifier).state = null;
       },
       child: Stack(
@@ -71,7 +76,10 @@ class SelectionLayer extends ConsumerWidget {
             Positioned.fill(
               child: IgnorePointer(
                 child: CustomPaint(
-                  painter: SelectionRectPainter(selCurrent: selCurrent, selStart: selStart),
+                  painter: SelectionRectPainter(
+                    selStart: selStart,
+                    selCurrent: selCurrent,
+                  ),
                 ),
               ),
             ),

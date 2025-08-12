@@ -25,3 +25,26 @@ class GraphChanged      extends GraphEvent {
   final Graph graph;
   GraphChanged(this.graph);
 }
+
+/// Tab (Blueprint) events – for toolbar/tab-strip UI
+class BlueprintOpened extends GraphEvent {
+  final String id;
+  final String title;
+  BlueprintOpened(this.id, this.title);
+}
+
+class BlueprintClosed extends GraphEvent {
+  final String id;
+  BlueprintClosed(this.id);
+}
+
+class ActiveBlueprintChanged extends GraphEvent {
+  final String id;
+  ActiveBlueprintChanged(this.id);
+}
+
+class BlueprintRenamed extends GraphEvent {
+  final String id;
+  final String title;
+  BlueprintRenamed(this.id, this.title);
+}

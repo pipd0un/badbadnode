@@ -1,5 +1,11 @@
 // lib/controller/graph_controller.dart
-
+//
+// GraphController is now a multi-document manager.
+// It keeps multiple Blueprint "tabs" open at once. Each tab has its own
+// Graph state, undo/redo stack and globals. Clipboard is shared across tabs.
+// Running/evaluating acts on the active tab. Switching tabs re-emits a
+// full reload sequence (GraphCleared → NodeAdded* → ConnectionAdded* → GraphChanged)
+// so Riverpod/UI rebuild consistently.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -24,85 +30,211 @@ import '../services/history_service.dart'
 
 const double kGridSize = gm.kGridSize;
 
+/// Internal per-blueprint document bundle.
+class _Doc {
+  Graph graph;
+  final GraphHistoryService history;
+  final Map<String, dynamic> globals;
+  bool globalsBootstrapped;
+  String title;
+
+  _Doc({required this.graph, required this.title})
+    : history = GraphHistoryService(),
+      globals = <String, dynamic>{},
+      globalsBootstrapped = false {
+    history.init(graph.nodes, graph.connections);
+  }
+}
+
+
+/// Public, read-only descriptor for the tab strip.
+class BlueprintTabInfo {
+  final String id;
+  final String title;
+  const BlueprintTabInfo({required this.id, required this.title});
+}
+
 class GraphController {
   // ───────────────── singleton ─────────────────
   GraphController._internal() {
     registerBuiltInNodes();
-    _undoRedo.init(_state.nodes, _state.connections);
+    // create first blank blueprint
+    _openNewBlueprintInternal(
+      title: 'Blueprint 1',
+      makeActive: true,
+      fireEvents: false,
+    );
   }
   static final GraphController _inst = GraphController._internal();
   factory GraphController() => _inst;
 
-  // ───────────────── internal state ─────────────────
-  Graph _state = Graph.empty();
-  Graph get graph => _state;
-  Map<String, Node> get nodes => _state.nodes;
-  List<Connection> get connections => _state.connections;
-  final Map<String, dynamic> _globals = {};
-
-  bool _globalsBootstrapped = false;
-  // ignore: unnecessary_getters_setters
-  bool get globalsBootstrapped => _globalsBootstrapped;
-  set globalsBootstrapped(bool v) => _globalsBootstrapped = v;
-
-  Map<String, dynamic> get globals => _globals;
-  void setGlobal(String k, dynamic v) => _globals[k] = v;
-  dynamic getGlobal(String k) => _globals[k];
-
-  /// Reset all global state and mark globals as needing initialization.
-  void resetGlobals() {
-    _globals.clear();
-    _globalsBootstrapped = false;
-  }
-
+  // ───────────────── multi-doc state ─────────────────
   final MessageHub _hub = MessageHub();
 
-  // ───────────────── undo / redo stack ─────────────────
-  final GraphHistoryService _undoRedo = GraphHistoryService();
-  bool get canUndo => _undoRedo.canUndo;
-  bool get canRedo => _undoRedo.canRedo;
+  final Map<String, _Doc> _docs = {};
+  String _activeId = '';
+  int _bpCounter = 1; // for default names
 
-  void _snapshot() => _undoRedo.push(_state.nodes, _state.connections);
+  _Doc get _doc => _docs[_activeId]!;
 
-  void undo() {
-    if (!canUndo) return;
-    _restoreSnapshot(_undoRedo.undo());
+  // ───────────────── tab API (public) ─────────────────
+  List<BlueprintTabInfo> get tabs => [
+    for (final e in _docs.entries)
+      BlueprintTabInfo(id: e.key, title: e.value.title),
+  ];
+  String get activeBlueprintId => _activeId;
+
+  /// Open a new empty blueprint and activate it.
+  String newBlueprint({String? title}) {
+    final t =
+        title?.trim().isNotEmpty == true
+            ? title!.trim()
+            : 'Blueprint ${++_bpCounter}';
+    final id = _openNewBlueprintInternal(
+      title: t,
+      makeActive: true,
+      fireEvents: true,
+    );
+    return id;
   }
 
-  void redo() {
-    if (!canRedo) return;
-    _restoreSnapshot(_undoRedo.redo());
+  /// Close a blueprint tab. If it was active, activates another.
+  void closeBlueprint(String id) {
+    if (!_docs.containsKey(id)) return;
+    final wasActive = id == _activeId;
+    _docs.remove(id);
+    _hub.fire(BlueprintClosed(id));
+    if (_docs.isEmpty) {
+      // Always keep one tab around.
+      _openNewBlueprintInternal(
+        title: 'Blueprint ${++_bpCounter}',
+        makeActive: true,
+        fireEvents: true,
+      );
+      return;
+    }
+    if (wasActive) {
+      _activeId = _docs.keys.first;
+      _hub.fire(ActiveBlueprintChanged(_activeId));
+      _emitFullReload();
+    } else {
+      // Non-active closed; let UI refresh lightweight if needed.
+      _hub.fire(GraphChanged(_doc.graph));
+    }
   }
 
-  void _restoreSnapshot(GraphSnapshot snap) {
-    _state = Graph(nodes: snap.nodes, connections: snap.connections);
+  /// Switch active blueprint tab.
+  void activateBlueprint(String id) {
+    if (!_docs.containsKey(id) || id == _activeId) return;
+    _activeId = id;
+    _hub.fire(ActiveBlueprintChanged(id));
+    _emitFullReload();
+  }
+
+  /// Rename a tab (no IO side-effects).
+  void renameBlueprint(String id, String newTitle) {
+    final d = _docs[id];
+    if (d == null) return;
+    d.title = newTitle;
+    _hub.fire(BlueprintRenamed(id, newTitle));
+  }
+
+  // ───────────────── internal helpers ─────────────────
+  String _openNewBlueprintInternal({
+    required String title,
+    required bool makeActive,
+    required bool fireEvents,
+  }) {
+    final id = _id();
+    _docs[id] = _Doc(graph: Graph.empty(), title: title);
+    if (makeActive) _activeId = id;
+    if (fireEvents) {
+      _hub.fire(BlueprintOpened(id, title));
+      _hub.fire(ActiveBlueprintChanged(_activeId));
+      _emitFullReload();
+    }
+    return id;
+  }
+
+  void _emitFullReload() {
+    // Re-announce current active doc so widgets reconstruct nodes/wires.
     _hub.fire(GraphCleared());
-    for (final n in _state.nodes.values) {
+    for (final n in _doc.graph.nodes.values) {
       _hub.fire(NodeAdded(n.id));
     }
-    for (final c in _state.connections) {
+    for (final c in _doc.graph.connections) {
       _hub.fire(ConnectionAdded(c.fromPortId, c.toPortId));
     }
-    _hub.fire(GraphChanged(_state));
+    _hub.fire(GraphChanged(_doc.graph));
   }
 
   // ───────────────── event stream ─────────────────
   Stream<T> on<T>() => _hub.on<T>();
 
   // ───────────────── id helpers ─────────────────
-  String _id() => '${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(1000)}';
+  String _id() =>
+      '${DateTime.now().microsecondsSinceEpoch}${Random().nextInt(1000)}';
 
   String _nodeIdFromPort(String pid) {
-    final match = RegExp(r'^(.+)_([^_]+)_([^_]+)$').firstMatch(pid);
+    final match = RegExp(r'^(.+)([^]+)([^_]+)$').firstMatch(pid);
     if (match == null) throw FormatException('Invalid portId: $pid');
     return match.group(1)!;
+  }
+
+  // ───────────────── active graph shortcuts ─────────────────
+  Graph get graph => _doc.graph;
+  Map<String, Node> get nodes => _doc.graph.nodes;
+  List<Connection> get connections => _doc.graph.connections;
+
+  // ───────────────── globals (per tab) ─────────────────
+  Map<String, dynamic> get globals => _doc.globals;
+  void setGlobal(String k, dynamic v) => _doc.globals[k] = v;
+  dynamic getGlobal(String k) => _doc.globals[k];
+
+  bool get globalsBootstrapped => _doc.globalsBootstrapped;
+  set globalsBootstrapped(bool v) => _doc.globalsBootstrapped = v;
+
+  /// Reset all global state and mark globals as needing initialization.
+  void resetGlobals() {
+    _doc.globals.clear();
+    _doc.globalsBootstrapped = false;
+  }
+
+  // ───────────────── undo / redo stack (per tab) ─────────────────
+  bool get canUndo => _doc.history.canUndo;
+  bool get canRedo => _doc.history.canRedo;
+
+  void _snapshot() =>
+      _doc.history.push(_doc.graph.nodes, _doc.graph.connections);
+
+  void undo() {
+    if (!canUndo) return;
+    _restoreSnapshot(_doc.history.undo());
+  }
+
+  void redo() {
+    if (!canRedo) return;
+    _restoreSnapshot(_doc.history.redo());
+  }
+
+  void _restoreSnapshot(GraphSnapshot snap) {
+    _doc.graph = Graph(nodes: snap.nodes, connections: snap.connections);
+    _hub.fire(GraphCleared());
+    for (final n in _doc.graph.nodes.values) {
+      _hub.fire(NodeAdded(n.id));
+    }
+    for (final c in _doc.graph.connections) {
+      _hub.fire(ConnectionAdded(c.fromPortId, c.toPortId));
+    }
+    _hub.fire(GraphChanged(_doc.graph));
   }
 
   // ───────────────── Node CRUD ─────────────────
   void addNodeOfType(String type, double x, double y) {
     _snapshot();
-    final id  = _id();
-    NodeDefinition? def = NodeRegistry().lookup(type) ?? CustomNodeRegistry().all[type];
+    final id = _id();
+    NodeDefinition? def =
+        NodeRegistry().lookup(type) ?? CustomNodeRegistry().all[type];
     if (def == null) throw ArgumentError('Unknown node type "$type"');
 
     final node = Node(
@@ -111,71 +243,71 @@ class GraphController {
       data: {
         'x': x,
         'y': y,
-        'inputs' : List<String>.from(def.inputs),
+        'inputs': List<String>.from(def.inputs),
         'outputs': List<String>.from(def.outputs),
         ...def.initialData,
       },
     );
-    _state = gm.addNode(_state, node);
+    _doc.graph = gm.addNode(_doc.graph, node);
     _hub.fire(NodeAdded(id));
-    _hub.fire(GraphChanged(_state));
+    _hub.fire(GraphChanged(_doc.graph));
   }
 
   void moveNode(String id, double dx, double dy) {
-    _state = gm.moveNode(_state, id, dx, dy);
+    _doc.graph = gm.moveNode(_doc.graph, id, dx, dy);
     _hub.fire(NodeMoved(id, dx, dy));
-    _hub.fire(GraphChanged(_state));
+    _hub.fire(GraphChanged(_doc.graph));
   }
 
   void snapNodeToGrid(String id) {
     _snapshot();
-    _state = gm.snapNode(_state, id);
+    _doc.graph = gm.snapNode(_doc.graph, id);
     _hub.fire(NodeMoved(id, 0, 0));
-    _hub.fire(GraphChanged(_state));
+    _hub.fire(GraphChanged(_doc.graph));
   }
 
   void updateNodeData(String id, String key, dynamic value) {
     _snapshot();
-    _state = gm.updateNodeData(_state, id, key, value);
+    _doc.graph = gm.updateNodeData(_doc.graph, id, key, value);
     _hub.fire(NodeDataChanged(id));
-    _hub.fire(GraphChanged(_state));
+    _hub.fire(GraphChanged(_doc.graph));
   }
 
   void deleteNode(String id) {
     _snapshot();
-    _state = gm.deleteNode(_state, id);
+    _doc.graph = gm.deleteNode(_doc.graph, id);
     _hub.fire(NodeDeleted(id));
-    _hub.fire(GraphChanged(_state));
+    _hub.fire(GraphChanged(_doc.graph));
   }
 
   // ───────────────── Connections ─────────────────
   void addConnection(String from, String to) {
     _snapshot();
     // Only one connection per input – remove existing
-    _state = gm.deleteConnectionForInput(_state, to);
+    _doc.graph = gm.deleteConnectionForInput(_doc.graph, to);
     final conn = Connection(id: _id(), fromPortId: from, toPortId: to);
-    _state = gm.addConnection(_state, conn);
+    _doc.graph = gm.addConnection(_doc.graph, conn);
     _hub.fire(ConnectionAdded(from, to));
-    _hub.fire(GraphChanged(_state));
+    _hub.fire(GraphChanged(_doc.graph));
   }
 
   void deleteConnectionForInput(String toPortId) {
     _snapshot();
-    final prevConn = _state.connections.firstWhere(
+    final prevConn = _doc.graph.connections.firstWhere(
       (c) => c.toPortId == toPortId,
       orElse: () => Connection(id: '', fromPortId: '', toPortId: ''),
     );
-    _state = gm.deleteConnectionForInput(_state, toPortId);
+    _doc.graph = gm.deleteConnectionForInput(_doc.graph, toPortId);
     if (prevConn.id.isNotEmpty) {
       _hub.fire(ConnectionDeleted(prevConn.id));
     }
-    _hub.fire(GraphChanged(_state));
+    _hub.fire(GraphChanged(_doc.graph));
   }
 
   bool hasConnectionTo(String toPortId) =>
-      _state.connections.any((c) => c.toPortId == toPortId);
+      _doc.graph.connections.any((c) => c.toPortId == toPortId);
 
-  // ───────────────── Clipboard ─────────────────
+  // ───────────────── Clipboard (shared across tabs) ─────────────────
   List<Node>? _clipNodes;
   List<Connection>? _clipConns;
 
@@ -185,15 +317,16 @@ class GraphController {
       for (final id in ids)
         Node(
           id: id,
-          type: _state.nodes[id]!.type,
-          data: Map<String, dynamic>.from(_state.nodes[id]!.data),
-        )
+          type: _doc.graph.nodes[id]!.type,
+          data: Map<String, dynamic>.from(_doc.graph.nodes[id]!.data),
+        ),
     ];
-    _clipConns = _state.connections.where((c) {
-      final fromNode = _nodeIdFromPort(c.fromPortId);
-      final toNode = _nodeIdFromPort(c.toPortId);
-      return ids.contains(fromNode) && ids.contains(toNode);
-    }).toList();
+    _clipConns =
+        _doc.graph.connections.where((c) {
+          final fromNode = _nodeIdFromPort(c.fromPortId);
+          final toNode = _nodeIdFromPort(c.toPortId);
+          return ids.contains(fromNode) && ids.contains(toNode);
+        }).toList();
   }
 
   void cutNodes(Iterable<String> ids) {
@@ -209,8 +342,12 @@ class GraphController {
     if (_clipNodes == null || _clipNodes!.isEmpty) return;
     _snapshot();
     // Calculate offset to paste near cursor
-    final minX = _clipNodes!.map((n) => (n.data['x'] as num).toDouble()).reduce(min);
-    final minY = _clipNodes!.map((n) => (n.data['y'] as num).toDouble()).reduce(min);
+    final minX = _clipNodes!
+        .map((n) => (n.data['x'] as num).toDouble())
+        .reduce(min);
+    final minY = _clipNodes!
+        .map((n) => (n.data['y'] as num).toDouble())
+        .reduce(min);
     final dx = dstX - minX;
     final dy = dstY - minY;
 
@@ -227,7 +364,7 @@ class GraphController {
           'y': (orig.data['y'] as num).toDouble() + dy,
         },
       );
-      _state = gm.addNode(_state, newNode);
+      _doc.graph = gm.addNode(_doc.graph, newNode);
       _hub.fire(NodeAdded(nid));
     }
     // Recreate connections between pasted nodes
@@ -240,13 +377,13 @@ class GraphController {
         fromPortId: c.fromPortId.replaceFirst(oldFrom, newIds[oldFrom]!),
         toPortId: c.toPortId.replaceFirst(oldTo, newIds[oldTo]!),
       );
-      _state = gm.addConnection(_state, newConn);
+      _doc.graph = gm.addConnection(_doc.graph, newConn);
       _hub.fire(ConnectionAdded(newConn.fromPortId, newConn.toPortId));
     }
-    _hub.fire(GraphChanged(_state));
+    _hub.fire(GraphChanged(_doc.graph));
   }
 
-  // ───────────────── Evaluation ─────────────────
+  // ───────────────── Evaluation (active tab only) ─────────────────
   Future<Map<String, dynamic>> evaluate() async {
     return GraphEvaluator(this).run();
   }
@@ -255,20 +392,27 @@ class GraphController {
     return GraphEvaluator(this).evaluateFrom(nodeId);
   }
 
-  // ───────────────── JSON I/O ─────────────────
+  // ───────────────── JSON I/O (active tab only) ─────────────────
   Map<String, dynamic> toJson() {
     return {
-      'nodes': _state.nodes.values.map((n) => n.toJson()).toList(),
-      'connections': _state.connections
-          .where((c) =>
-              _state.nodes.containsKey(_nodeIdFromPort(c.fromPortId)) &&
-              _state.nodes.containsKey(_nodeIdFromPort(c.toPortId)))
-          .map((c) => {
-                'id': c.id,
-                'fromPortId': c.fromPortId,
-                'toPortId': c.toPortId,
-              })
-          .toList(),
+      'nodes': _doc.graph.nodes.values.map((n) => n.toJson()).toList(),
+      'connections':
+          _doc.graph.connections
+              .where(
+                (c) =>
+                    _doc.graph.nodes.containsKey(
+                      _nodeIdFromPort(c.fromPortId),
+                    ) &&
+                    _doc.graph.nodes.containsKey(_nodeIdFromPort(c.toPortId)),
+              )
+              .map(
+                (c) => {
+                  'id': c.id,
+                  'fromPortId': c.fromPortId,
+                  'toPortId': c.toPortId,
+                },
+              )
+              .toList(),
     };
   }
 
@@ -281,14 +425,17 @@ class GraphController {
       final node = Node.fromJson(raw as Map<String, dynamic>);
       nodes[node.id] = node;
     }
-    final connections = (json['connections'] as List<dynamic>)
-        .map((m) => Connection(
-              id: m['id'] as String,
-              fromPortId: m['fromPortId'] as String,
-              toPortId: m['toPortId'] as String,
-            ))
-        .toList();
-    _state = Graph(nodes: nodes, connections: connections);
+    final connections =
+        (json['connections'] as List<dynamic>)
+            .map(
+              (m) => Connection(
+                id: m['id'] as String,
+                fromPortId: m['fromPortId'] as String,
+                toPortId: m['toPortId'] as String,
+              ),
+            )
+            .toList();
+    _doc.graph = Graph(nodes: nodes, connections: connections);
     // Emit events for full reload
     _hub.fire(GraphCleared());
     for (final n in nodes.values) {
@@ -297,7 +444,7 @@ class GraphController {
     for (final c in connections) {
       _hub.fire(ConnectionAdded(c.fromPortId, c.toPortId));
     }
-    _hub.fire(GraphChanged(_state));
+    _hub.fire(GraphChanged(_doc.graph));
   }
 
   Future<void> loadJsonFromFile() async {
@@ -313,12 +460,12 @@ class GraphController {
     loadJsonMap(jsonMap);
   }
 
-  // ───────────────── Clear All ─────────────────
+  // ───────────────── Clear All (active tab only) ─────────────────
   void clear() {
     resetGlobals();
     _snapshot();
-    _state = gm.clear(_state);
+    _doc.graph = gm.clear(_doc.graph);
     _hub.fire(GraphCleared());
-    _hub.fire(GraphChanged(_state));
+    _hub.fire(GraphChanged(_doc.graph));
   }
 }
