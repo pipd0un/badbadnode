@@ -1,15 +1,4 @@
 // lib/widgets/toolbar.dart
-//
-// Thinner, desktop-like app bar with a bottom tab strip.
-// Adds a “New” menu (Blueprint) and a tabs row under the AppBar.
-// Run/eval and all actions operate on the *active* tab.
-// UPDATE: Double-tap a tab to rename it inline. Editing auto-saves on Enter
-// or when focus is lost. Esc cancels and restores the old name.
-// UPDATE-2: Replaced deprecated RawKeyboardListener usage with modern
-// Shortcuts/Actions + SingleActivator to handle Esc while editing.
-// UPDATE-3: Limit rebuild listeners to high-level events only (GraphChanged,
-//           ActiveBlueprintChanged, BlueprintOpened/Closed/Renamed) to avoid
-//           per-node storm setState() calls that slowed tab switch/close.
 
 import 'dart:async';
 import 'dart:convert';
@@ -72,7 +61,6 @@ class _ToolbarState extends ConsumerState<Toolbar> {
   Widget build(BuildContext context) {
     final messenger = ref.read(scaffoldMessengerKeyProvider);
     final hasAssets = ref.watch(assetFilesProvider).isNotEmpty;
-    final sel = ref.watch(selectedNodesProvider);
 
     Future<void> showPasteJsonDialog() async {
       final controller = TextEditingController();
@@ -259,30 +247,6 @@ class _ToolbarState extends ConsumerState<Toolbar> {
           width: 8,
           indent: 6,
           endIndent: 6,
-        ),
-
-        IconButton(
-          iconSize: iconSz,
-          tooltip: 'Copy',
-          icon: const Icon(
-            Icons.copy,
-            color: Color.fromARGB(255, 255, 119, 230),
-          ),
-          onPressed: sel.isNotEmpty ? () => _graph.copyNodes(sel) : null,
-        ),
-        IconButton(
-          iconSize: iconSz,
-          tooltip: 'Cut',
-          icon: const Icon(
-            Icons.content_cut,
-            color: Color.fromARGB(255, 255, 119, 230),
-          ),
-          onPressed: sel.isNotEmpty
-              ? () {
-                  _graph.cutNodes(sel);
-                  ref.read(selectedNodesProvider.notifier).clear();
-                }
-              : null,
         ),
         IconButton(
           iconSize: iconSz,

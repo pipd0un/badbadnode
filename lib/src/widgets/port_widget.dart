@@ -1,10 +1,16 @@
 // lib/widgets/port_widget.dart
+//
+// Reports canvas-local port centers to the portPositionProvider.
+// UPDATED: watches activeCanvasTickProvider so when a tab becomes active,
+// ports re-measure immediately and wires render correctly without waiting
+// for any user interaction.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../providers/ui/canvas_providers.dart' show connectionCanvasKeyProvider;
+import '../providers/ui/canvas_providers.dart'
+    show connectionCanvasKeyProvider, activeCanvasTickProvider;
 import '../providers/ui/port_position_provider.dart'
     show PortPositionNotifier, portPositionProvider;
 
@@ -61,6 +67,11 @@ class _PortWidgetState extends ConsumerState<PortWidget> {
 
   @override
   Widget build(BuildContext context) {
+    // If the canvas just became active, force a fresh position report
+    // on the next frame so wires render correctly without user input.
+    ref.watch(activeCanvasTickProvider);
+    SchedulerBinding.instance.addPostFrameCallback((_) => _reportPosition());
+
     return Container(
       key: _key,
       width: 12,

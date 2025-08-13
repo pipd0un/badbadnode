@@ -1,5 +1,6 @@
 // lib/core/evaluator.dart
 import 'dart:async';
+import 'dart:collection' show Queue;
 
 import '../controller/graph_controller.dart';
 import '../models/node.dart';
@@ -21,6 +22,26 @@ class GraphEvaluator {
   void setObject(String k, dynamic v) => _globals[k] = v;
   dynamic getObject(String k) => _globals[k];
 
+  // inside GraphEvaluator
+  final Map<String, NodeDefinition> _defCache = {};
+  List<Node>? _topoCache;
+  Map<String, List<String>>? _fwd, _rev;
+
+  void _buildAdjacency() {
+    if (_fwd != null) return;
+    _fwd = {};
+    _rev = {};
+    for (final c in graph.connections) {
+      if (c.toPortId.contains('_in_process') || c.toPortId.contains('_in_action')) {
+        continue;
+      }
+      final f = _nodeIdOfPort(c.fromPortId);
+      final t = _nodeIdOfPort(c.toPortId);
+      (_fwd![f] ??= <String>[]).add(t);
+      (_rev![t] ??= <String>[]).add(f);
+    }
+  }
+
   // ───────── helpers ─────────
   String _nodeIdOfPort(String pid) {
     final parts = pid.split('_');
@@ -31,8 +52,8 @@ class GraphEvaluator {
   String nodeIdOfPort(String portId) => _nodeIdOfPort(portId);
 
   NodeDefinition _def(String type) =>
-      NodeRegistry().lookup(type) ??
-      (throw Exception('No node definition for "$type"'));
+    _defCache[type] ??= NodeRegistry().lookup(type) ??
+    (throw Exception('No node definition for "$type"'));
 
   Future<dynamic> _exec(Node node, {String? overrideInput}) {
     final def = _def(node.type);
@@ -45,33 +66,33 @@ class GraphEvaluator {
 
   /*───────────────────── TOPOLOGICAL ORDER ─────────────────────*/
   List<Node> _topoSort() {
-    final nodes = graph.nodes.values.toList();
-    final deps = <String, Set<String>>{for (final n in nodes) n.id: <String>{}};
+    if (_topoCache != null) return _topoCache!;
+    _buildAdjacency();
 
-    for (final c in graph.connections) {
-      if (c.toPortId.contains('_in_process') ||
-          c.toPortId.contains('_in_action')) {
-        continue;
+    final ids = graph.nodes.keys.toList();
+    final inDeg = <String, int>{ for (final id in ids) id: (_rev![id]?.length ?? 0) };
+    final q = Queue<String>()..addAll(ids.where((id) => inDeg[id] == 0));
+    final orderedIds = <String>[];
+
+    while (q.isNotEmpty) {
+      final u = q.removeFirst();
+      orderedIds.add(u);
+      for (final v in _fwd![u] ?? const <String>[]) {
+        final nv = inDeg[v]! - 1; // read
+        inDeg[v] = nv;            // write back
+        if (nv == 0) q.add(v);    // enqueue when in-degree hits zero
       }
-      final from = _nodeIdOfPort(c.fromPortId);
-      final to   = _nodeIdOfPort(c.toPortId);
-      deps[to]!.add(from);
     }
 
-    final visited = <String>{};
-    final result  = <Node>[];
-    void dfs(String id) {
-      if (!visited.add(id)) return;
-      for (final d in deps[id]!) {
-        dfs(d);
+    // In case of cycles, append remaining nodes to keep stable behavior.
+    if (orderedIds.length < ids.length) {
+      for (final id in ids) {
+        if (!orderedIds.contains(id)) orderedIds.add(id);
       }
-      final n = graph.nodes[id];
-      if (n != null) result.add(n);
     }
-    for (final id in deps.keys) {
-      dfs(id);
-    }
-    return result;
+
+    _topoCache = [for (final id in orderedIds) graph.nodes[id]!];
+    return _topoCache!;
   }
 
   /*────────────────── GLOBAL BOOTSTRAP ───────────────────────*/
@@ -158,45 +179,39 @@ class GraphEvaluator {
     _values.clear();
     _ranInLoop.clear();
     await _ensureGlobals();
+    _buildAdjacency();
 
-    // collect reachable nodes (skip _in_process / _in_action links)
     final needed = <String>{};
-    void crawl(String id) {
-      if (!needed.add(id)) return;
-      for (final c in graph.connections) {
-        bool blocked(String p) =>
-            p.contains('_in_process') || p.contains('_in_action');
-        if (blocked(c.fromPortId) || blocked(c.toPortId)) continue;
-        final f = _nodeIdOfPort(c.fromPortId);
-        final t = _nodeIdOfPort(c.toPortId);
-        if (f == id) crawl(t);
-        if (t == id) crawl(f);
+    final q = Queue<String>()..add(rootId);
+    while (q.isNotEmpty) {
+      final id = q.removeFirst();
+      if (!needed.add(id)) continue;
+      for (final up in _rev![id] ?? const <String>[]) {
+        q.add(up);
+      }
+      for (final dn in _fwd![id] ?? const <String>[]) {
+        q.add(dn);
       }
     }
-    crawl(rootId);
 
     final executedCmd = <String>{};
     final topo = _topoSort();
 
-    // 1️⃣ DATA pass (needed only)
+    // DATA pass
     for (final n in topo) {
       if (!needed.contains(n.id) || _def(n.type).isCommand) continue;
-
       if (n.type == 'if') {
         final cond = input(n, 'bool') as bool? ?? false;
-        _values[n.id] =
-            await _exec(n, overrideInput: cond ? 'true' : 'false');
-        continue;
-      }
-      if (n.type == 'loop') {
+        _values[n.id] = await _exec(n, overrideInput: cond ? 'true' : 'false');
+      } else if (n.type == 'loop') {
         await _runLoop(n, executedCmd, neededFilter: needed);
-        continue;
+      } else {
+        final out = await _exec(n);
+        if (out != null) _values[n.id] = out;
       }
-      final out = await _exec(n);
-      if (out != null) _values[n.id] = out;
     }
 
-    // 2️⃣ COMMAND pass (needed only)
+    // COMMAND pass
     for (final n in topo) {
       if (!needed.contains(n.id)) continue;
       if (!_def(n.type).isCommand) continue;
@@ -210,80 +225,68 @@ class GraphEvaluator {
 
   /*────────────────────  LOOP helper  ──────────────────────*/
   Future<void> _runLoop(
-    Node loop,
-    Set<String> executedCmd,           // ← global “already done” set
-    {Set<String>? neededFilter}
-  ) async {
-    final list = input(loop, 'in') as List<dynamic>? ?? [];
-    final done = <dynamic>[];
+  Node loop,
+  Set<String> executedCmd, {Set<String>? neededFilter}
+) async {
+  final list = input(loop, 'in') as List<dynamic>? ?? [];
 
-    // 1. find sink nodes that anchor the body
-    final sinks = graph.connections
-        .where((c) => c.toPortId == '${loop.id}_in_process')
-        .map((c) => _nodeIdOfPort(c.fromPortId))
-        .where((id) => neededFilter == null || neededFilter.contains(id))
-        .toSet();
+  // sinks once
+  final sinks = graph.connections
+      .where((c) => c.toPortId == '${loop.id}_in_process')
+      .map((c) => _nodeIdOfPort(c.fromPortId))
+      .where((id) => neededFilter == null || neededFilter.contains(id))
+      .toSet();
 
-    // Keep track of every command that appears in the body,
-    // so we can skip it later in the global pass.
-    final cmdsSeenInBody = <String>{};
+  // build the loop body set once (topological order filtered once)
+  final body = <String>{};
+  void expand(String id) {
+    if (!body.add(id) || id == loop.id) return;
+    for (final up in graph.connections.where((c) => _nodeIdOfPort(c.toPortId) == id)) {
+      expand(_nodeIdOfPort(up.fromPortId));
+    }
+    for (final dn in graph.connections.where((c) => _nodeIdOfPort(c.fromPortId) == id)) {
+      expand(_nodeIdOfPort(dn.toPortId));
+    }
+  }
+  sinks.forEach(expand);
 
-    for (final item in list) {
-      _values['${loop.id}_item'] = item;
+  final ordered = _topoSort().where((n) => body.contains(n.id)).toList();
+  final cmdsSeenInBody = <String>{};
+  final done = <dynamic>[];
 
-      /* build body set */
-      final body = <String>{};
-      void expand(String id) {
-        if (!body.add(id) || id == loop.id) return;
-        for (final c in graph.connections
-            .where((c) => _nodeIdOfPort(c.toPortId) == id)) {
-          expand(_nodeIdOfPort(c.fromPortId));
-        }
-        for (final c in graph.connections
-            .where((c) => _nodeIdOfPort(c.fromPortId) == id)) {
-          expand(_nodeIdOfPort(c.toPortId));
-        }
-      }
-      sinks.forEach(expand);
+  for (final item in list) {
+    _values['${loop.id}_item'] = item;
 
-      /* order the body topologically */
-      final ordered =
-          _topoSort().where((n) => body.contains(n.id)).toList();
-
-      /* DATA pass inside the loop */
-      for (final n in ordered) {
-        if (neededFilter != null && !neededFilter.contains(n.id)) continue;
-        if (_def(n.type).isCommand) continue;
-
-        if (n.type == 'if') {
-          final cond = input(n, 'bool') as bool? ?? false;
-          _values[n.id] =
-              await _exec(n, overrideInput: cond ? 'true' : 'false');
-        } else {
-          final out = await _exec(n);
-          if (out != null) _values[n.id] = out;
-        }
-      }
-
-      /* COMMAND pass inside the loop – run every time */
-      for (final n in ordered) {
-        if (!_def(n.type).isCommand) continue;
-        cmdsSeenInBody.add(n.id);          // remember it
-        await _exec(n);                    // ALWAYS run each iteration
-      }
-
-      /* collect sink values */
-      for (final s in sinks) {
-        done.add(_values[s]);
+    // DATA inside loop
+    for (final n in ordered) {
+      if (neededFilter != null && !neededFilter.contains(n.id)) continue;
+      if (_def(n.type).isCommand) continue;
+      if (n.type == 'if') {
+        final cond = input(n, 'bool') as bool? ?? false;
+        _values[n.id] = await _exec(n, overrideInput: cond ? 'true' : 'false');
+      } else {
+        final out = await _exec(n);
+        if (out != null) _values[n.id] = out;
       }
     }
 
-    /* ensure global pass skips these commands */
-    executedCmd.addAll(cmdsSeenInBody);
+    // COMMAND inside loop (every iteration)
+    for (final n in ordered) {
+      if (!_def(n.type).isCommand) continue;
+      cmdsSeenInBody.add(n.id);
+      await _exec(n);
+    }
 
-    _values[loop.id] = done;
-    _values['${loop.id}_done'] = done;
+    // collect sink values
+    for (final s in sinks) {
+      done.add(_values[s]);
+    }
   }
+
+  executedCmd.addAll(cmdsSeenInBody);
+  _values[loop.id] = done;
+  _values['${loop.id}_done'] = done;
+}
 
 
   /*──────────────── reachability check ─────────────────────*/

@@ -18,33 +18,14 @@ class ConnectionDeleted extends GraphEvent { final String connectionId;      Con
 
 /// Fired when the whole canvas is wiped (new file / Clear-All)
 class GraphCleared      extends GraphEvent {}
-
-/// NEW: emitted every time the immutable [Graph] value changes.
-/// Lets Riverpod watch a single source of truth.
-class GraphChanged      extends GraphEvent {
-  final Graph graph;
-  GraphChanged(this.graph);
-}
+class GraphChanged      extends GraphEvent { final Graph graph;              GraphChanged(this.graph); }
 
 /// Tab (Blueprint) events – for toolbar/tab-strip UI
-class BlueprintOpened extends GraphEvent {
-  final String id;
-  final String title;
-  BlueprintOpened(this.id, this.title);
-}
+class BlueprintOpened        extends GraphEvent { final String id; final String title; BlueprintOpened(this.id, this.title); }
+class BlueprintClosed        extends GraphEvent { final String id;                     BlueprintClosed(this.id);             }
 
-class BlueprintClosed extends GraphEvent {
-  final String id;
-  BlueprintClosed(this.id);
-}
+class ActiveBlueprintChanged extends GraphEvent { final String id;                     ActiveBlueprintChanged(this.id);      }
+class BlueprintRenamed       extends GraphEvent { final String id; final String title; BlueprintRenamed(this.id, this.title);}
 
-class ActiveBlueprintChanged extends GraphEvent {
-  final String id;
-  ActiveBlueprintChanged(this.id);
-}
-
-class BlueprintRenamed extends GraphEvent {
-  final String id;
-  final String title;
-  BlueprintRenamed(this.id, this.title);
-}
+class TabGraphChanged        extends GraphEvent { final String id; final Graph  graph; TabGraphChanged(this.id, this.graph); }
+class TabGraphCleared        extends GraphEvent { final String id;                     TabGraphCleared(this.id);             }

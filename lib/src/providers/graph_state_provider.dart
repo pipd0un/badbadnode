@@ -13,24 +13,53 @@ import '../core/graph_events.dart';
 import '../domain/graph.dart';
 
 class GraphStateNotifier extends StateNotifier<Graph> {
-  GraphStateNotifier(this._ctrl)
-      : super(_ctrl.graph) {
-    _sub = _ctrl.on<GraphChanged>().listen((e) => state = e.graph);
+  GraphStateNotifier._base(this.controller, Graph initial) : super(initial);
+
+  factory GraphStateNotifier(GraphController ctrl) {
+    final n = GraphStateNotifier._base(ctrl, ctrl.graph);
+    n._sub = ctrl.on<GraphChanged>().listen((e) => n.state = e.graph);
+    return n;
   }
 
-  final GraphController _ctrl;
-  late final StreamSubscription _sub;
+  final GraphController controller;
+  StreamSubscription? _sub;
 
   @override
   void dispose() {
-    _sub.cancel();
+    _sub?.cancel();
     super.dispose();
   }
 }
 
-/// Single immutable source-of-truth provider.
-/// Widgets can now do: 'final graph = ref.watch(graphProvider);'
 final graphProvider =
     StateNotifierProvider<GraphStateNotifier, Graph>((ref) {
   return GraphStateNotifier(GraphController());
 });
+
+class GraphStateByTabNotifier extends GraphStateNotifier {
+  final String _id;
+  final List<StreamSubscription> _subs = [];
+
+  GraphStateByTabNotifier(GraphController ctrl, this._id)
+      : super._base(ctrl, ctrl.graphOf(_id)) {
+    _subs.add(ctrl.on<TabGraphChanged>().listen((e) {
+      if (e.id == _id) state = e.graph;
+    }));
+    _subs.add(ctrl.on<TabGraphCleared>().listen((e) {
+      if (e.id == _id) state = Graph.empty();
+    }));
+  }
+
+  @override
+  void dispose() {
+    for (final s in _subs) {
+      s.cancel();
+    }
+    super.dispose(); 
+  }
+}
+
+final graphProviderForTab =
+    StateNotifierProvider.family<GraphStateByTabNotifier, Graph, String>(
+  (ref, id) => GraphStateByTabNotifier(GraphController(), id),
+);
