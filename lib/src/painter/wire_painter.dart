@@ -1,4 +1,6 @@
-// lib/painter/wire_painter.dart
+// lib/src/painter/wire_painter.dart
+
+import 'dart:developer' as dev;
 
 import 'package:flutter/material.dart';
 
@@ -17,6 +19,8 @@ class WirePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final sw = Stopwatch()..start();
+
     String nodeIdOf(String portId) {
       final p = portId.split('_');
       return p.sublist(0, p.length - 2).join('_');
@@ -26,6 +30,8 @@ class WirePainter extends CustomPainter {
       ..color = const Color.fromARGB(255, 255, 112, 226)
       ..strokeWidth = 3
       ..style = PaintingStyle.stroke;
+
+    int drawn = 0;
 
     for (final c in cons) {
       final a0 = ports[c.fromPortId];
@@ -56,7 +62,14 @@ class WirePainter extends CustomPainter {
           ..cubicTo(a.dx, midY, b.dx, midY, b.dx, b.dy);
         canvas.drawPath(path, paint);
       }
+      drawn++;
     }
+
+    sw.stop();
+    dev.log(
+      '[perf] WirePainter.paint: ${sw.elapsedMicroseconds / 1000.0} ms (drawn=$drawn)',
+      name: 'badbadnode.perf',
+    );
   }
 
   @override

@@ -1,4 +1,4 @@
-// lib/widgets/virtualized_canvas.dart
+// lib/src/widgets/virtualized_canvas.dart
 //
 // Splits the canvas into two layers: nodes (heavy widgets) & wires
 // (single CustomPaint).  No EventBus subscription needed anymore –
@@ -27,12 +27,15 @@ class VirtualizedCanvas extends ConsumerStatefulWidget {
 class _VirtualizedCanvasState extends ConsumerState<VirtualizedCanvas> {
   @override
   Widget build(BuildContext context) {
-    // The heavy work is done in child layers.  This wrapper itself
-    // no longer listens to Graph events.
-    return const Stack(
+    // The heavy work is done in child layers.
+    return Stack(
       children: [
-        NodesLayer(),   // structural rebuild only
-        WiresLayer(),   // repaints independently every drag tick
+        const RepaintBoundary(child: NodesLayer()),
+        Positioned.fill(
+          child: RepaintBoundary(
+            child: const WiresLayer(),
+          ),
+        ),
       ],
     );
   }

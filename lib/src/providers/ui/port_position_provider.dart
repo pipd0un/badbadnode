@@ -1,26 +1,48 @@
 // lib/providers/ui/port_position_provider.dart
 
 import 'dart:ui';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class PortPositionNotifier extends StateNotifier<Map<String, Offset>> {
   PortPositionNotifier() : super(const {});
 
-  /// Add/update a port centre
-  void set(String portId, Offset pos) {
-    final existing = state[portId];
-    // avoid noisy rebuilds for sub-pixel changes
-    if (existing != null && (existing - pos).distance < .1) return;
-    state = {...state, portId: pos};
+  // ── micro-batching buffers ─────────────────────────────────────────────
+  final Map<String, Offset> _stagedSet = <String, Offset>{};
+  final Set<String> _stagedRemove = <String>{};
+  bool _scheduled = false;
+
+  void _scheduleFlush() {
+    if (_scheduled) return;
+    _scheduled = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      // Merge all staged sets/removes in a single state write.
+      var next = {...state, ..._stagedSet};
+      for (final id in _stagedRemove) {
+        next.remove(id);
+      }
+      _stagedSet.clear();
+      _stagedRemove.clear();
+      _scheduled = false;
+      state = next;
+    });
   }
 
-  /// Remove a port 'after' the current build-frame finished.
-  /// This prevents Riverpod’s "tried to modify provider while building" error
-  /// when many PortWidgets unmount at once (e.g. during big drags).
+  /// Add/update a port centre (batched – at most one state write per frame).
+  void set(String portId, Offset pos) {
+    final existing = state[portId];
+    // avoid noisy staging for sub-pixel/no-op changes
+    if (existing != null && (existing - pos).distance < .1) return;
+    _stagedRemove.remove(portId);
+    _stagedSet[portId] = pos;
+    _scheduleFlush();
+  }
+
+  /// Remove a port (batched – at most one state write per frame).
   void remove(String portId) {
-    Future<void>.microtask(() {
-      state = {...state}..remove(portId);
-    });
+    _stagedSet.remove(portId);
+    _stagedRemove.add(portId);
+    _scheduleFlush();
   }
 }
 

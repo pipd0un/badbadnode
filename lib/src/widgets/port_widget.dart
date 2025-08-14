@@ -1,16 +1,13 @@
-// lib/widgets/port_widget.dart
+// lib/src/widgets/port_widget.dart
 //
 // Reports canvas-local port centers to the portPositionProvider.
-// UPDATED: watches activeCanvasTickProvider so when a tab becomes active,
-// ports re-measure immediately and wires render correctly without waiting
-// for any user interaction.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/ui/canvas_providers.dart'
-    show connectionCanvasKeyProvider, activeCanvasTickProvider;
+    show connectionCanvasKeyProvider, canvasScaleProvider;
 import '../providers/ui/port_position_provider.dart'
     show PortPositionNotifier, portPositionProvider;
 
@@ -28,6 +25,7 @@ class PortWidget extends ConsumerStatefulWidget {
 class _PortWidgetState extends ConsumerState<PortWidget> {
   late final PortPositionNotifier _notifier;
   late final GlobalKey _key;
+  double _lastScale = 1.0;
 
   @override
   void initState() {
@@ -38,12 +36,8 @@ class _PortWidgetState extends ConsumerState<PortWidget> {
     SchedulerBinding.instance.addPostFrameCallback((_) => _reportPosition());
   }
 
-  @override
-  void didUpdateWidget(covariant PortWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Re-report on every rebuild.
-    SchedulerBinding.instance.addPostFrameCallback((_) => _reportPosition());
-  }
+  // NOTE: we deliberately do NOT re-report on every didUpdateWidget anymore.
+  // That was a big source of redundant position writes on tab switches.
 
   void _reportPosition() {
     final box = _key.currentContext?.findRenderObject() as RenderBox?;
@@ -67,10 +61,12 @@ class _PortWidgetState extends ConsumerState<PortWidget> {
 
   @override
   Widget build(BuildContext context) {
-    // If the canvas just became active, force a fresh position report
-    // on the next frame so wires render correctly without user input.
-    ref.watch(activeCanvasTickProvider);
-    SchedulerBinding.instance.addPostFrameCallback((_) => _reportPosition());
+    // Re-measure only when scale actually changes.
+    final scale = ref.watch(canvasScaleProvider);
+    if ((scale - _lastScale).abs() > 0.0005) {
+      _lastScale = scale;
+      SchedulerBinding.instance.addPostFrameCallback((_) => _reportPosition());
+    }
 
     return Container(
       key: _key,

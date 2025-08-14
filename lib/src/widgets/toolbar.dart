@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../dev/perf_switch_probe.dart' show PerfSwitchProbe;
 import '../controller/graph_controller.dart';
 import '../core/graph_events.dart'
     show
@@ -16,7 +17,8 @@ import '../core/graph_events.dart'
         BlueprintOpened,
         BlueprintClosed,
         BlueprintRenamed;
-import '../providers/graph_controller_provider.dart' show graphControllerProvider;
+import '../providers/graph_controller_provider.dart'
+    show graphControllerProvider;
 import '../providers/app_providers.dart' show scaffoldMessengerKeyProvider;
 import '../providers/asset_provider.dart' show assetFilesProvider;
 import '../providers/ui/selection_providers.dart' show selectedNodesProvider;
@@ -36,16 +38,26 @@ class _ToolbarState extends ConsumerState<Toolbar> {
   static const double _topBarHeight = 32.0;
   static const double _tabBarHeight = 28.0;
 
+  bool _pendingRebuild = false;
+  void _scheduleToolbarRebuild() {
+    if (_pendingRebuild) return;
+    _pendingRebuild = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+      _pendingRebuild = false;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     _graph = ref.read(graphControllerProvider);
     _subs = [
-      _graph.on<GraphChanged>().listen((_) => setState(() {})),
-      _graph.on<ActiveBlueprintChanged>().listen((_) => setState(() {})),
-      _graph.on<BlueprintOpened>().listen((_) => setState(() {})),
-      _graph.on<BlueprintClosed>().listen((_) => setState(() {})),
-      _graph.on<BlueprintRenamed>().listen((_) => setState(() {})),
+      _graph.on<GraphChanged>().listen((_) => _scheduleToolbarRebuild()),
+      _graph.on<ActiveBlueprintChanged>().listen((_) => _scheduleToolbarRebuild()),
+      _graph.on<BlueprintOpened>().listen((_) => _scheduleToolbarRebuild()),
+      _graph.on<BlueprintClosed>().listen((_) => _scheduleToolbarRebuild()),
+      _graph.on<BlueprintRenamed>().listen((_) => _scheduleToolbarRebuild()),
     ];
   }
 
@@ -144,15 +156,18 @@ class _ToolbarState extends ConsumerState<Toolbar> {
             Icons.add_box,
             color: Color.fromARGB(255, 255, 119, 230),
           ),
-          itemBuilder: (ctx) => const [
-            PopupMenuItem<String>(
-              value: 'blueprint',
-              child: Text('Blueprint'),
-            ),
-          ],
+          itemBuilder:
+              (ctx) => const [
+                PopupMenuItem<String>(
+                  value: 'blueprint',
+                  child: Text('Blueprint'),
+                ),
+              ],
           onSelected: (v) {
             if (v == 'blueprint') {
-              _graph.newBlueprint();
+              // Arm the probe for “create + switch” path too.
+              final id = _graph.newBlueprint();
+              PerfSwitchProbe.start(id);
             }
           },
         ),
@@ -225,8 +240,10 @@ class _ToolbarState extends ConsumerState<Toolbar> {
             Icons.select_all,
             color: Color.fromARGB(255, 255, 119, 230),
           ),
-          onPressed: () =>
-              ref.read(selectedNodesProvider.notifier).selectAll(_graph.nodes.keys.toList()),
+          onPressed:
+              () => ref
+                  .read(selectedNodesProvider.notifier)
+                  .selectAll(_graph.nodes.keys.toList()),
         ),
         IconButton(
           iconSize: iconSz,
@@ -248,24 +265,6 @@ class _ToolbarState extends ConsumerState<Toolbar> {
           indent: 6,
           endIndent: 6,
         ),
-        IconButton(
-          iconSize: iconSz,
-          tooltip: 'Paste (into active tab)',
-          icon: const Icon(
-            Icons.paste,
-            color: Color.fromARGB(255, 255, 119, 230),
-          ),
-          onPressed: () => _graph.pasteClipboard(100, 100),
-        ),
-
-        VerticalDivider(
-          color: const Color.fromARGB(255, 255, 90, 90),
-          thickness: 1,
-          width: 8,
-          indent: 6,
-          endIndent: 6,
-        ),
-
         TextButton.icon(
           icon: Icon(
             hasAssets ? Icons.eject : Icons.folder_open,
@@ -277,9 +276,10 @@ class _ToolbarState extends ConsumerState<Toolbar> {
             '',
             style: TextStyle(color: Colors.white, fontSize: 12),
           ),
-          onPressed: hasAssets
-              ? () => ref.read(assetFilesProvider.notifier).clear()
-              : () => ref.read(assetFilesProvider.notifier).loadAssets(),
+          onPressed:
+              hasAssets
+                  ? () => ref.read(assetFilesProvider.notifier).clear()
+                  : () => ref.read(assetFilesProvider.notifier).loadAssets(),
           style: TextButton.styleFrom(
             minimumSize: const Size(28, 28),
             padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -373,7 +373,7 @@ class _ToolbarState extends ConsumerState<Toolbar> {
       ],
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(_tabBarHeight),
-        child: _TabsStrip(controller: _graph, height: _tabBarHeight),
+        child: RepaintBoundary(child: _TabsStrip(controller: _graph, height: _tabBarHeight),)
       ),
     );
   }
@@ -402,7 +402,11 @@ class _TabsStrip extends StatelessWidget {
               size: 16,
               color: Color.fromARGB(255, 255, 119, 230),
             ),
-            onPressed: () => controller.newBlueprint(),
+            onPressed: () {
+              // Arm the probe for “create + switch” path via plus button.
+              final id = controller.newBlueprint();
+              PerfSwitchProbe.start(id);
+            },
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints.tightFor(width: 28, height: 28),
           ),
@@ -512,16 +516,27 @@ class _TabChipState extends State<_TabChip> {
   Widget build(BuildContext context) {
     final isActive = widget.isActive;
     final bg =
-        isActive ? const Color.fromARGB(255, 53, 52, 52) : const Color.fromARGB(255, 46, 45, 45);
+        isActive
+            ? const Color.fromARGB(255, 53, 52, 52)
+            : const Color.fromARGB(255, 46, 45, 45);
     final fg =
-        isActive ? const Color.fromARGB(255, 255, 169, 169) : const Color.fromARGB(255, 220, 220, 220);
+        isActive
+            ? const Color.fromARGB(255, 255, 169, 169)
+            : const Color.fromARGB(255, 220, 220, 220);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
       child: InkWell(
-        onTap: () => widget.controller.activateBlueprint(widget.id),
-        onDoubleTap: _startEdit,
+        onTapDown: (d) { PerfSwitchProbe.start(widget.id); widget.controller.activateBlueprint(widget.id); },
+        onTap: () {}, // no-op
+        splashFactory: NoSplash.splashFactory,
+        enableFeedback: false,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
         borderRadius: BorderRadius.circular(6),
+        onDoubleTap: _startEdit,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8),
           height: 22,
@@ -529,9 +544,10 @@ class _TabChipState extends State<_TabChip> {
             color: bg,
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
-              color: isActive
-                  ? const Color.fromARGB(255, 255, 119, 230)
-                  : const Color.fromARGB(60, 255, 119, 230),
+              color:
+                  isActive
+                      ? const Color.fromARGB(255, 255, 119, 230)
+                      : const Color.fromARGB(60, 255, 119, 230),
             ),
           ),
           child: Row(
@@ -545,7 +561,8 @@ class _TabChipState extends State<_TabChip> {
                   height: 18,
                   child: Shortcuts(
                     shortcuts: const <ShortcutActivator, Intent>{
-                      SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
+                      SingleActivator(LogicalKeyboardKey.escape):
+                          DismissIntent(),
                     },
                     child: Actions(
                       actions: <Type, Action<Intent>>{

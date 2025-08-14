@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 final connectionCanvasKeyProvider = Provider<GlobalKey>((ref) => GlobalKey());
 
 /// A small per-canvas "activation tick".
-/// When a tab becomes active, TabHost bumps this integer for that tab’s scope.
-/// Port widgets watch it and re-report their positions immediately, so wires
-/// and hit-testing are correct without waiting for any user interaction.
 final activeCanvasTickProvider = StateProvider<int>((_) => 0);
+/// Current canvas scale reported by the InteractiveViewer for this canvas.
+/// Port widgets watch this and re-measure only when scale changes.
+final canvasScaleProvider = StateProvider<double>((_) => 1.0);

@@ -1,9 +1,10 @@
-// lib/controller/graph_controller.dart
+// lib/src/controller/graph_controller.dart
 
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'dart:developer' as dev;
 import 'package:file_picker/file_picker.dart';
 
 import '../core/message_hub.dart' show MessageHub;
@@ -89,10 +90,16 @@ class GraphController {
   String newBlueprint({String? title}) {
     final t =
         title?.trim().isNotEmpty == true ? title!.trim() : 'Blueprint ${++_bpCounter}';
+    final sw = Stopwatch()..start();
     final id = _openNewBlueprintInternal(
       title: t,
       makeActive: true,
       fireEvents: true,
+    );
+    sw.stop();
+    dev.log(
+      '[perf] GraphController.newBlueprint($id) open+activate=${(sw.elapsedMicroseconds / 1000.0).toStringAsFixed(2)} ms',
+      name: 'badbadnode.perf',
     );
     return id;
   }
@@ -117,17 +124,24 @@ class GraphController {
     }
     if (wasActive) {
       _activeId = _docs.keys.first;
+      // Do not fire GraphChanged here – switching tabs shouldn’t rebuild
+      // graph-bound widgets unless the graph itself changed.
       _hub.fire(ActiveBlueprintChanged(_activeId));
-      _hub.fire(GraphChanged(_doc.graph));
     }
   }
 
   /// Switch active blueprint tab.
   void activateBlueprint(String id) {
     if (!_docs.containsKey(id) || id == _activeId) return;
+    final sw = Stopwatch()..start();
     _activeId = id;
     _hub.fire(ActiveBlueprintChanged(id));
-    _hub.fire(GraphChanged(_doc.graph));
+    sw.stop();
+    dev.log(
+      '[perf] GraphController.activateBlueprint(${id.substring(0, 6)}…): '
+      '${sw.elapsedMicroseconds / 1000.0} ms',
+      name: 'badbadnode.perf',
+    );
   }
 
   /// Rename a tab (no IO side-effects).
