@@ -9,12 +9,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/node.dart';
+import '../models/node.dart' show Node;
 import '../nodes/node_definition.dart' show NodeRegistry;
 import '../nodes/simple_node.dart' show InPort, OutPort;
-import '../providers/graph_controller_provider.dart' show graphControllerProvider;
+import '../providers/graph/graph_controller_provider.dart' show graphControllerProvider;
 import '../providers/ui/selection_providers.dart' show selectedNodesProvider, collapsedNodesProvider;
-import 'port_widget.dart';
+import 'port_widget.dart' show PortWidget;
 
 class NodeWidget extends ConsumerWidget {
   final Node node;

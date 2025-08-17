@@ -10,7 +10,7 @@ export 'src/nodes/simple_node.dart' show NodeActions, InPort, OutPort;
 export 'src/nodes/simple_node.dart' show SimpleNode;
 
 export 'src/widgets/node_widget.dart' show GenericNodeWidget;
-export 'src/widgets/scene_builder.dart' show SceneBuilder;
+export 'src/widgets/host.dart' show Host;
 export 'src/widgets/toolbar.dart' show Toolbar;
 
 export 'src/providers/app_providers.dart' show scaffoldMessengerKeyProvider;

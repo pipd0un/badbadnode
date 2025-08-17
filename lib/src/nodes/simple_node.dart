@@ -10,7 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../controller/graph_controller.dart';
 import '../providers/connection/connection_providers.dart';
-import '../providers/graph_controller_provider.dart';
+import '../providers/graph/graph_controller_provider.dart';
 import '../providers/ui/canvas_providers.dart';
 import '../widgets/port_widget.dart';
 import 'node_definition.dart';

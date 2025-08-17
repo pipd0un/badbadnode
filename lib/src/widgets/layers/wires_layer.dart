@@ -10,7 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../painter/wire_painter.dart';
-import '../../providers/graph_state_provider.dart' show graphProvider;
+import '../../providers/graph/graph_state_provider.dart' show graphProvider;
 import '../../providers/ui/port_position_provider.dart' show portPositionProvider;
 import '../../providers/ui/selection_providers.dart' show selectedNodesProvider;
 import '../../providers/ui/viewport_provider.dart' show viewportProvider;

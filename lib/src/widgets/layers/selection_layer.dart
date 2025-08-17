@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../painter/selection_rectangle_painter.dart' show SelectionRectPainter;
-import '../../providers/graph_controller_provider.dart' show graphControllerProvider;
+import '../../providers/graph/graph_controller_provider.dart' show graphControllerProvider;
 import '../../providers/ui/selection_providers.dart' show selectedNodesProvider;
 import '../../providers/ui/selection_rectangle_provider.dart' show selectionRectCurrentProvider, selectionRectStartProvider;
 

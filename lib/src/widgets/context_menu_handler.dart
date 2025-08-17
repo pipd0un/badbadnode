@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart' show ConsumerWidget, Wid
 
 import '../models/node.dart' show Node;
 import '../nodes/node_definition.dart' show CustomNodeRegistry;
-import '../providers/graph_controller_provider.dart' show graphControllerProvider;
+import '../providers/graph/graph_controller_provider.dart' show graphControllerProvider;
 import '../providers/ui/selection_providers.dart' show collapsedNodesProvider, selectedNodesProvider;
 
 class ContextMenuHandler extends ConsumerWidget {

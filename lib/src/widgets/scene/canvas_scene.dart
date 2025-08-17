@@ -1,34 +1,5 @@
-// lib/src/widgets/scene_builder.dart
-
-import 'dart:async';
-import 'dart:developer' as dev;
-
-import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart' show SchedulerBinding;
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../../dev/perf_switch_probe.dart' show PerfSwitchProbe;
-import '../painter/grid_painter.dart' show GridPainter;
-import '../providers/connection/connection_providers.dart'
-    show connectionStartPortProvider, connectionDragPosProvider;
-import '../providers/ui/canvas_providers.dart'
-    show connectionCanvasKeyProvider, canvasScaleProvider;
-import '../providers/ui/interaction_providers.dart' show nodeDraggingProvider;
-import '../providers/ui/selection_providers.dart' show selectedNodesProvider;
-import '../providers/ui/viewport_provider.dart' show viewportProvider;
-import 'context_menu_handler.dart' show ContextMenuHandler;
-import 'layers/preview_layer.dart' show PreviewLayer;
-import 'layers/selection_layer.dart' show SelectionLayer;
-import 'layers/viewer_layer.dart' show ViewerLayer;
-import 'tab_host.dart' show TabHost;
-import 'virtualized_canvas.dart' show VirtualizedCanvas;
-
-/// Entry: just the tabs.
-class SceneBuilder extends StatelessWidget {
-  const SceneBuilder({super.key});
-  @override
-  Widget build(BuildContext context) => const TabHost();
-}
+// lib/src/widgets/scene/canvas_scene.dart
+part of '../host.dart';
 
 /// CanvasScene: one instance per tab.
 class CanvasScene extends ConsumerStatefulWidget {
@@ -208,34 +179,4 @@ class _CanvasSceneState extends ConsumerState<CanvasScene> {
 
     return child;
   }
-}
-
-/// Small proxy so GridPainter rebuilds only when viewport changes.
-class _GridPaintProxy extends ConsumerWidget {
-  const _GridPaintProxy({required this.tabId});
-  final String tabId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final vr = ref.watch(viewportProvider);
-    return CustomPaint(painter: GridPainter(tabId: tabId, viewport: vr));
-  }
-}
-
-class ProbePaintOnce extends CustomPainter {
-  const ProbePaintOnce({super.repaint});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // Defer to end of paint so we're measuring *visual* readiness.
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      PerfSwitchProbe.markCanvasPainted();
-    });
-  }
-
-  // Kept for compatibility with older calls; now a no-op.
-  static void reset() {}
-
-  @override
-  bool shouldRepaint(covariant ProbePaintOnce oldDelegate) => false;
 }

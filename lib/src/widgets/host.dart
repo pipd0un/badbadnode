@@ -1,12 +1,25 @@
-// lib/src/widgets/tab_host.dart
+// lib/src/widgets/scene/host.dart
 
 import 'dart:async';
 import 'dart:developer' as dev;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/scheduler.dart' show SchedulerBinding;
 
-import '../controller/graph_controller.dart';
+// layers
+import 'layers/wires_layer.dart' show WiresLayer;
+import 'layers/nodes_layer.dart' show NodesLayer;
+import 'layers/viewer_layer.dart' show ViewerLayer;
+import 'layers/preview_layer.dart' show PreviewLayer;
+import 'layers/selection_layer.dart' show SelectionLayer;
+
+// utils
+import 'context_menu_handler.dart' show ContextMenuHandler;
+import '../../dev/perf_switch_probe.dart' show PerfSwitchProbe;
+import '../controller/graph_controller.dart' show GraphController;
+
+// events
 import '../core/graph_events.dart'
     show
         ActiveBlueprintChanged,
@@ -15,30 +28,51 @@ import '../core/graph_events.dart'
         BlueprintRenamed,
         TabGraphChanged,
         TabGraphCleared;
-import '../painter/grid_painter.dart' show GridPainterCache;
-import '../providers/graph_state_provider.dart'
-    show graphProvider, GraphStateByTabNotifier;
-import '../providers/ui/canvas_providers.dart'
-    show activeCanvasTickProvider;
-import '../providers/ui/viewport_provider.dart' show viewportProvider;
-import 'scene_builder.dart' show CanvasScene;
 
-class TabHost extends ConsumerStatefulWidget {
-  const TabHost({super.key});
+import '../painter/grid_painter.dart' 
+    show 
+        GridPainter, 
+        GridPainterCache;
+import '../providers/graph/graph_state_provider.dart'
+    show 
+        GraphStateByTabNotifier, 
+        graphProvider;
+import '../providers/ui/canvas_providers.dart'
+    show
+        activeCanvasTickProvider,
+        connectionCanvasKeyProvider,
+        canvasScaleProvider;
+import '../providers/connection/connection_providers.dart'
+    show 
+        connectionStartPortProvider, 
+        connectionDragPosProvider;
+import '../providers/ui/interaction_providers.dart' show nodeDraggingProvider;
+import '../providers/ui/selection_providers.dart' show selectedNodesProvider;
+import '../providers/ui/viewport_provider.dart' show viewportProvider;
+
+// ---- Parts (shared imports live in this file) -------------------------------
+part 'scene/canvas_scene.dart';
+part 'scene/grid_paint_proxy.dart';
+part 'scene/probe_paint_once.dart';
+part 'scene/virtualized_canvas.dart';
+
+/// Host: entry widget that manages tabs (blueprints) and renders the active
+/// CanvasScene. Replaces the old SceneBuilder+TabHost pair.
+class Host extends ConsumerStatefulWidget {
+  const Host({super.key});
 
   @override
-  ConsumerState<TabHost> createState() => _TabHostState();
+  ConsumerState<Host> createState() => _HostState();
 }
 
-class _TabHostState extends ConsumerState<TabHost> {
+class _HostState extends ConsumerState<Host> {
   late final GraphController _graph;
   late final List<StreamSubscription> _subs;
 
   /// Per-tab layout-dirty flag (set when graph changed while tab was inactive).
   final Map<String, bool> _layoutDirty = {};
 
-  /// Optional per-tab activation “tick”. We keep it for compatibility and
-  /// update it directly inside each tab’s container if we really need to poke.
+  /// Optional per-tab activation “tick”.
   final Map<String, int> _ticks = {};
 
   /// Persist a dedicated ProviderContainer per tab so **tab switches do not
@@ -46,7 +80,7 @@ class _TabHostState extends ConsumerState<TabHost> {
   final Map<String, ProviderContainer> _containers = {};
 
   /// Explicit per-tab repaint tickers used to force one paint on activation
-  /// so ProbePaintOnce always runs (no reliance on fallback).
+  /// so ProbePaintOnce always runs.
   final Map<String, ValueNotifier<int>> _repaints = {};
 
   ProviderContainer _createContainer(String tabId) {
@@ -62,7 +96,7 @@ class _TabHostState extends ConsumerState<TabHost> {
     _containers[tabId] = container;
     sw.stop();
     dev.log(
-      '[perf] TabHost._createContainer($tabId) took ${sw.elapsedMicroseconds / 1000.0} ms',
+      '[perf] Host._createContainer($tabId) took ${sw.elapsedMicroseconds / 1000.0} ms',
       name: 'badbadnode.perf',
     );
     return container;
@@ -96,6 +130,7 @@ class _TabHostState extends ConsumerState<TabHost> {
   @override
   void initState() {
     super.initState();
+    // NOTE: Keeping parity with previous TabHost behavior (direct instance).
     _graph = GraphController();
 
     // Seed first tab’s container + state
@@ -121,7 +156,7 @@ class _TabHostState extends ConsumerState<TabHost> {
         if (mounted) setState(() {});
         sw.stop();
         dev.log(
-          '[perf] TabHost.onActiveBlueprintChanged listener: ${sw.elapsedMilliseconds} ms',
+          '[perf] Host.onActiveBlueprintChanged listener: ${sw.elapsedMilliseconds} ms',
           name: 'badbadnode.perf',
         );
       }),
@@ -178,8 +213,9 @@ class _TabHostState extends ConsumerState<TabHost> {
 
     final tabs = _graph.tabs;
     final activeId = _graph.activeBlueprintId;
-    final activeIndex =
-        tabs.indexWhere((t) => t.id == activeId).clamp(0, tabs.length - 1);
+    final activeIndex = tabs
+        .indexWhere((t) => t.id == activeId)
+        .clamp(0, tabs.length - 1);
 
     final children = <Widget>[];
     for (var i = 0; i < tabs.length; i++) {
@@ -204,7 +240,7 @@ class _TabHostState extends ConsumerState<TabHost> {
 
     sw.stop();
     dev.log(
-      '[perf] TabHost.build (on switch): ${sw.elapsedMicroseconds / 1000.0} ms',
+      '[perf] Host.build (on switch): ${sw.elapsedMicroseconds / 1000.0} ms',
       name: 'badbadnode.perf',
     );
 
@@ -212,8 +248,10 @@ class _TabHostState extends ConsumerState<TabHost> {
     final vpNow = _ensureContainer(activeId).read(viewportProvider);
     if (vpNow != Rect.zero) {
       final w = vpNow.width.toInt(), h = vpNow.height.toInt();
-      dev.log('[perf] TabHost.build active viewport persists: ${w}x$h',
-          name: 'badbadnode.perf');
+      dev.log(
+        '[perf] Host.build active viewport persists: ${w}x$h',
+        name: 'badbadnode.perf',
+      );
     }
 
     return stack;

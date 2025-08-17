@@ -20,7 +20,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/node.dart';
 import '../providers/ui/interaction_providers.dart' show nodeDraggingProvider;
 import '../providers/ui/selection_providers.dart' show selectedNodesProvider;
-import '../providers/graph_controller_provider.dart' show graphControllerProvider;
+import '../providers/graph/graph_controller_provider.dart' show graphControllerProvider;
 import 'node_widget.dart' show NodeWidget;
 
 /// Global delta shared by all nodes in the current drag-group.

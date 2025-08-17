@@ -8,7 +8,7 @@ import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../providers/graph_state_provider.dart' show graphProvider;
+import '../../providers/graph/graph_state_provider.dart' show graphProvider;
 import '../node_drag_wrapper.dart' show NodeDragWrapper;
 
 class NodesLayer extends ConsumerWidget {

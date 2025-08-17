@@ -1,14 +1,6 @@
 // lib/src/widgets/virtualized_canvas.dart
-//
-// Splits the canvas into two layers: nodes (heavy widgets) & wires
-// (single CustomPaint).  No EventBus subscription needed anymore –
-// Riverpod handles rebuilds when the *graph structure* changes.
 
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'layers/nodes_layer.dart'  show NodesLayer;
-import 'layers/wires_layer.dart'  show WiresLayer;
+part of '../host.dart';
 
 class VirtualizedCanvas extends ConsumerStatefulWidget {
   final GlobalKey canvasKey;

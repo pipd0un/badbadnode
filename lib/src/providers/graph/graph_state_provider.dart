@@ -8,9 +8,9 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../controller/graph_controller.dart';
-import '../core/graph_events.dart';
-import '../domain/graph.dart';
+import '../../controller/graph_controller.dart';
+import '../../core/graph_events.dart';
+import '../../domain/graph.dart';
 
 class GraphStateNotifier extends StateNotifier<Graph> {
   GraphStateNotifier._base(this.controller, Graph initial) : super(initial);
