@@ -8,8 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../dev/perf_switch_probe.dart' show PerfSwitchProbe;
-import '../controller/graph_controller.dart';
+import '../core/graph_controller.dart';
 import '../core/graph_events.dart'
     show
         GraphChanged,

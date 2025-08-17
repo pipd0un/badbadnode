@@ -2,7 +2,7 @@
 import 'dart:async';
 import 'dart:collection' show Queue;
 
-import '../controller/graph_controller.dart';
+import 'graph_controller.dart';
 import '../models/node.dart';
 import '../models/connection.dart';
 import '../nodes/node_definition.dart' show NodeDefinition, NodeRegistry;

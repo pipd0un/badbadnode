@@ -8,7 +8,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../controller/graph_controller.dart';
+import '../../core/graph_controller.dart';
 import '../../core/graph_events.dart';
 import '../../domain/graph.dart';
 

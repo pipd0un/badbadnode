@@ -6,10 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../providers/ui/canvas_providers.dart'
-    show connectionCanvasKeyProvider, canvasScaleProvider;
-import '../providers/ui/port_position_provider.dart'
-    show PortPositionNotifier, portPositionProvider;
+import '../providers/ui/canvas_providers.dart' show canvasScaleProvider, connectionCanvasKeyProvider;
+import '../providers/ui/interaction_providers.dart' show nodeDraggingProvider;
+import '../providers/ui/port_position_provider.dart' show PortPositionNotifier, portPositionProvider, portPositionsEpochProvider;
 
 /// A circular port that reports its canvas-local centre position so that wires
 /// know where to start/end.
@@ -26,6 +25,8 @@ class _PortWidgetState extends ConsumerState<PortWidget> {
   late final PortPositionNotifier _notifier;
   late final GlobalKey _key;
   double _lastScale = 1.0;
+  bool _lastDragging = false;
+  int _seenEpoch = 0;
 
   @override
   void initState() {
@@ -36,10 +37,8 @@ class _PortWidgetState extends ConsumerState<PortWidget> {
     SchedulerBinding.instance.addPostFrameCallback((_) => _reportPosition());
   }
 
-  // NOTE: we deliberately do NOT re-report on every didUpdateWidget anymore.
-  // That was a big source of redundant position writes on tab switches.
-
   void _reportPosition() {
+    if (!mounted) return;
     final box = _key.currentContext?.findRenderObject() as RenderBox?;
     final canvasBox = ref
         .read(connectionCanvasKeyProvider)
@@ -54,19 +53,37 @@ class _PortWidgetState extends ConsumerState<PortWidget> {
 
   @override
   void dispose() {
-    // ↳ **DO NOT** remove the port here — that causes a brief gap
-    //    in your portPositions map and makes wires vanish.
+    // Remove this port from the positions map to avoid stale endpoints.
+    _notifier.remove(widget.portId);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Re-measure only when scale actually changes.
+    // 1) Re-measure on scale changes.
     final scale = ref.watch(canvasScaleProvider);
     if ((scale - _lastScale).abs() > 0.0005) {
       _lastScale = scale;
       SchedulerBinding.instance.addPostFrameCallback((_) => _reportPosition());
     }
+
+    // 2) Re-measure right after a drag ends (commit new absolute coords).
+    final dragging = ref.watch(nodeDraggingProvider);
+    if (_lastDragging && !dragging) {
+      SchedulerBinding.instance.addPostFrameCallback((_) => _reportPosition());
+    }
+    _lastDragging = dragging;
+
+    // 3) Re-measure when a global epoch bump happens (explicit request).
+    final epoch = ref.watch(portPositionsEpochProvider);
+    if (epoch != _seenEpoch) {
+      _seenEpoch = epoch;
+      SchedulerBinding.instance.addPostFrameCallback((_) => _reportPosition());
+    }
+
+    // 4) Also schedule one post-frame measurement on any build that happens
+    // due to layout/position updates (Positioned moved).
+    SchedulerBinding.instance.addPostFrameCallback((_) => _reportPosition());
 
     return Container(
       key: _key,

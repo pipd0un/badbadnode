@@ -34,9 +34,6 @@ class _TabsStrip extends StatelessWidget {
               // Create and immediately normalize its title to the smallest free index.
               final id = controller.newBlueprint();
               controller.renameBlueprint(id, nextTitle);
-
-              // Arm the probe for “create + switch” path via plus button.
-              PerfSwitchProbe.start(id);
             },
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints.tightFor(width: 28, height: 28),

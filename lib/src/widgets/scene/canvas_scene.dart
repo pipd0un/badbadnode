@@ -143,18 +143,7 @@ class _CanvasSceneState extends ConsumerState<CanvasScene> {
                             ),
                           ),
                         ),
-
-                        // 2) Explicit one-shot repaint trigger on activation.
-                        //    This painter draws nothing; it just signals the probe.
-                        Positioned.fill(
-                          child: RepaintBoundary(
-                            child: CustomPaint(
-                              painter: ProbePaintOnce(repaint: widget.repaint),
-                            ),
-                          ),
-                        ),
-
-                        // 3) The rest
+                        // 2) The rest
                         VirtualizedCanvas(
                           canvasKey: canvasKey,
                           controller: _tc,

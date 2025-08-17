@@ -18,4 +18,4 @@ export 'src/providers/asset_provider.dart' show assetFilesProvider;
 
 export 'src/services/snackbar_service.dart' show SnackbarService;
 
-export 'src/controller/graph_controller.dart' show GraphController;
+export 'src/core/graph_controller.dart' show GraphController;

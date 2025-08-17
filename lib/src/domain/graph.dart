@@ -1,4 +1,4 @@
-// lib/domain/graph.dart
+// lib/src/domain/graph.dart
 //
 // Immutable in-memory representation of a blueprint graph.
 

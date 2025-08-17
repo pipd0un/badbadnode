@@ -16,8 +16,6 @@ class NodesLayer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sw = Stopwatch()..start();
-
     final nodes = ref
         .watch(graphProvider)
         .nodes
@@ -40,13 +38,6 @@ class NodesLayer extends ConsumerWidget {
           ),
       ],
     );
-
-    sw.stop();
-    dev.log(
-      '[perf] NodesLayer.build: ${sw.elapsedMicroseconds / 1000.0} ms (nodes=${nodes.length})',
-      name: 'badbadnode.perf',
-    );
-
     return stack;
   }
 }

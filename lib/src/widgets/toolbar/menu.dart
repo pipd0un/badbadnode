@@ -32,9 +32,6 @@ class _NewMenu extends StatelessWidget {
           // Create then normalize title to the precomputed smallest free index.
           final id = graph.newBlueprint();
           graph.renameBlueprint(id, nextTitle);
-
-          // Arm the probe for “create + switch” path too.
-          PerfSwitchProbe.start(id);
         }
       },
     );

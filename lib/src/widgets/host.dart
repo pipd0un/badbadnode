@@ -5,7 +5,6 @@ import 'dart:developer' as dev;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/scheduler.dart' show SchedulerBinding;
 
 // layers
 import 'layers/wires_layer.dart' show WiresLayer;
@@ -16,8 +15,7 @@ import 'layers/selection_layer.dart' show SelectionLayer;
 
 // utils
 import 'context_menu_handler.dart' show ContextMenuHandler;
-import '../../dev/perf_switch_probe.dart' show PerfSwitchProbe;
-import '../controller/graph_controller.dart' show GraphController;
+import '../core/graph_controller.dart' show GraphController;
 
 // events
 import '../core/graph_events.dart'
@@ -53,7 +51,6 @@ import '../providers/ui/viewport_provider.dart' show viewportProvider;
 // ---- Parts (shared imports live in this file) -------------------------------
 part 'scene/canvas_scene.dart';
 part 'scene/grid_paint_proxy.dart';
-part 'scene/probe_paint_once.dart';
 part 'scene/virtualized_canvas.dart';
 
 /// Host: entry widget that manages tabs (blueprints) and renders the active

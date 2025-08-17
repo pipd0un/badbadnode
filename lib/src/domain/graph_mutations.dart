@@ -1,4 +1,4 @@
-// lib/domain/graph_mutations.dart
+// lib/src/domain/graph_mutations.dart
 
 import '../models/node.dart';
 import '../models/connection.dart';
@@ -7,14 +7,20 @@ import 'graph.dart';
 const double kGridSize = 20.0;
 
 //  ──────────────────────────────  nodes  ──────────────────────────────
-Graph addNode(Graph g, Node n) =>
-    g.copyWith(nodes: {...g.nodes, n.id: n});
+Graph addNode(Graph g, Node n) {
+  if (g.nodes.containsKey(n.id)) return g; // no-op if duplicate id
+  return g.copyWith(nodes: {...g.nodes, n.id: n});
+}
 
 Graph moveNode(Graph g, String id, double dx, double dy) {
+  if (dx == 0 && dy == 0) return g;
   final n = g.nodes[id];
   if (n == null) return g;
-  final nx = (n.data['x'] as num).toDouble() + dx;
-  final ny = (n.data['y'] as num).toDouble() + dy;
+  final rx = (n.data['x'] as num).toDouble();
+  final ry = (n.data['y'] as num).toDouble();
+  final nx = rx + dx;
+  final ny = ry + dy;
+  if (nx == rx && ny == ry) return g; // nothing changed
   final moved = Node(id: n.id, type: n.type, data: {...n.data, 'x': nx, 'y': ny});
   return g.copyWith(nodes: {...g.nodes, id: moved});
 }
@@ -26,6 +32,7 @@ Graph snapNode(Graph g, String id, {double gridSize = kGridSize}) {
   final ry = (n.data['y'] as num).toDouble();
   final sx = (rx / gridSize).round() * gridSize;
   final sy = (ry / gridSize).round() * gridSize;
+  if (sx == rx && sy == ry) return g; // already on grid
   final snapped =
       Node(id: n.id, type: n.type, data: {...n.data, 'x': sx, 'y': sy});
   return g.copyWith(nodes: {...g.nodes, id: snapped});
@@ -34,11 +41,14 @@ Graph snapNode(Graph g, String id, {double gridSize = kGridSize}) {
 Graph updateNodeData(Graph g, String id, String key, dynamic val) {
   final n = g.nodes[id];
   if (n == null) return g;
+  final prev = n.data[key];
+  if (prev == val) return g; // no change
   final updated = Node(id: n.id, type: n.type, data: {...n.data, key: val});
   return g.copyWith(nodes: {...g.nodes, id: updated});
 }
 
 Graph deleteNode(Graph g, String id) {
+  if (!g.nodes.containsKey(id)) return g;
   final conns =
       g.connections.where((c) => !c.fromPortId.startsWith('${id}_') && !c.toPortId.startsWith('${id}_')).toList();
   final nodes = {...g.nodes}..remove(id);
@@ -49,11 +59,20 @@ Graph deleteNode(Graph g, String id) {
 Graph addConnection(Graph g, Connection c) =>
     g.copyWith(connections: [...g.connections, c]);
 
-Graph deleteConnection(Graph g, String connectionId) =>
-    g.copyWith(connections: g.connections.where((c) => c.id != connectionId).toList());
+Graph deleteConnection(Graph g, String connectionId) {
+  final found = g.connections.any((c) => c.id == connectionId);
+  if (!found) return g;
+  return g.copyWith(
+      connections: g.connections.where((c) => c.id != connectionId).toList());
+}
 
-Graph deleteConnectionForInput(Graph g, String toPortId) =>
-    g.copyWith(connections: g.connections.where((c) => c.toPortId != toPortId).toList());
+Graph deleteConnectionForInput(Graph g, String toPortId) {
+  final has = g.connections.any((c) => c.toPortId == toPortId);
+  if (!has) return g;
+  return g.copyWith(
+      connections:
+          g.connections.where((c) => c.toPortId != toPortId).toList());
+}
 
 //  ───────────────────────────────  misc  ─────────────────────────────
 Graph clear(Graph g) => Graph.empty();

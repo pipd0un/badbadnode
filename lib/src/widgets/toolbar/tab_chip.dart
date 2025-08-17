@@ -121,8 +121,6 @@ class _TabChipState extends State<_TabChip> {
           onPointerCancel: (_) => _releasePress(),
           child: InkWell(
             onTapDown: (d) {
-              // Arm probe and activate immediately.
-              PerfSwitchProbe.start(widget.id);
               widget.controller.activateBlueprint(widget.id);
             },
             onTap: () {}, // no-op (we use onTapDown for immediacy)
