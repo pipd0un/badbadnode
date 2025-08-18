@@ -25,16 +25,14 @@ class PortPositionNotifier extends StateNotifier<Map<String, Offset>> {
   }
 
   void _scheduleFlush() {
-    // If we're already in a post-frame callback (common for measurements),
-    // commit immediately so we don't require *another* user-driven frame.
-    if (SchedulerBinding.instance.schedulerPhase ==
-        SchedulerPhase.postFrameCallbacks) {
-      _flushNow();
-      return;
-    }
     if (_scheduled) return;
     _scheduled = true;
-    SchedulerBinding.instance.addPostFrameCallback((_) => _flushNow());
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _flushNow();
+      }
+      _scheduled = false;
+    });
   }
 
   /// Add/update a port centre (batched – at most one state write per frame).
@@ -59,6 +57,37 @@ class PortPositionNotifier extends StateNotifier<Map<String, Offset>> {
     _stagedSet.clear();
     _stagedRemove.clear();
     state = const {};
+  }
+
+  /// Prune any stored positions that belong to nodes NOT in [nodeIds].
+  /// Safe to call after structural graph changes; commits immediately.
+  ///
+  /// Port IDs are of the form: "{nodeId}_{portName}_{in|out}".
+  void pruneByNodeIds(Set<String> nodeIds) {
+    if (state.isEmpty) return;
+    String nodeIdOf(String portId) {
+      final parts = portId.split('_');
+      return parts.sublist(0, parts.length - 2).join('_');
+    }
+
+    final next = <String, Offset>{};
+    state.forEach((pid, off) {
+      final nid = nodeIdOf(pid);
+      if (nodeIds.contains(nid)) next[pid] = off;
+    });
+
+    _stagedSet.clear();
+    _stagedRemove.clear();
+    _scheduled = false;
+    state = next; // immediate commit (no extra frame dependency)
+  }
+
+  @override
+  void dispose() {
+    _stagedSet.clear();
+    _stagedRemove.clear();
+    _scheduled = false;
+    super.dispose();
   }
 }
 

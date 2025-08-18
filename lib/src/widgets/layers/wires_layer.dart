@@ -4,8 +4,6 @@
 // Graph’s connection list changes (Riverpod).  Live-drag offset still
 // comes from [dragDeltaNotifier] so only selected wires animate.
 
-import 'dart:developer' as dev;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -15,6 +13,10 @@ import '../../providers/ui/port_position_provider.dart' show portPositionProvide
 import '../../providers/ui/selection_providers.dart' show selectedNodesProvider;
 import '../../providers/ui/viewport_provider.dart' show viewportProvider;
 import '../node_drag_wrapper.dart' show dragDeltaNotifier;
+
+/// File-scoped cache so wires can fall back to last-known endpoints for a frame.
+/// This preserves visual continuity when ports haven't re-measured yet.
+final Map<String, Offset> _lastKnownPortCenters = <String, Offset>{};
 
 class WiresLayer extends ConsumerWidget {
   const WiresLayer({super.key});
@@ -26,11 +28,14 @@ class WiresLayer extends ConsumerWidget {
     final selected  = ref.watch(selectedNodesProvider);
     final vp        = ref.watch(viewportProvider);
 
+    // Update last-known cache with any fresh measurements first.
+    if (positions.isNotEmpty) {
+      _lastKnownPortCenters.addAll(positions);
+    }
+
     return ValueListenableBuilder<Offset>(
       valueListenable: dragDeltaNotifier,
       builder: (_, Offset delta, __) {
-        final sw = Stopwatch()..start();
-
         // Inflate a bit so near-edge wires still show
         final screenRect = vp == Rect.zero ? vp : vp.inflate(600.0);
 
@@ -39,9 +44,14 @@ class WiresLayer extends ConsumerWidget {
           return p.sublist(0, p.length - 2).join('_');
         }
 
+        // Build a merged map that falls back to last-known coordinates if a port
+        // hasn't reported this frame yet. This mirrors pre-0.4.1 continuity.
+        final mergedPositions = Map<String, Offset>.from(_lastKnownPortCenters)
+          ..addAll(positions);
+
         // Apply delta to endpoints of wires whose node is selected (being dragged)
         Offset? endpoint(String portId) {
-          final base = positions[portId];
+          final base = mergedPositions[portId];
           if (base == null) return null;
           final nid = nodeIdOf(portId);
           return selected.contains(nid) ? base + delta : base;
@@ -58,6 +68,7 @@ class WiresLayer extends ConsumerWidget {
           return !(maxX < r.left || minX > r.right || maxY < r.top || minY > r.bottom);
         }
 
+        // Keep viewport culling, but evaluate with merged (fallback) positions.
         final visibleCons = (vp == Rect.zero)
             ? graph.connections
             : [
@@ -67,16 +78,13 @@ class WiresLayer extends ConsumerWidget {
                       c
               ];
 
-        final painter = WirePainter(visibleCons, positions, delta, selected);
-
-        sw.stop();
-        dev.log(
-          '[perf] WiresLayer.builder: ${sw.elapsedMicroseconds / 1000.0} ms (wires=${visibleCons.length})',
-          name: 'badbadnode.perf',
-        );
+        // Use merged positions so WirePainter gets fallback coords.
+        final painter = WirePainter(visibleCons, mergedPositions, delta, selected);
 
         return IgnorePointer(
-          child: CustomPaint(painter: painter, isComplex: true),
+          child: RepaintBoundary(
+            child: CustomPaint(painter: painter, isComplex: true),
+          ),
         );
       },
     );

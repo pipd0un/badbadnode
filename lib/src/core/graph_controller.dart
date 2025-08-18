@@ -6,7 +6,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
-import 'dart:developer' as dev;
 import 'package:file_picker/file_picker.dart';
 
 import 'message_hub.dart' show MessageHub;

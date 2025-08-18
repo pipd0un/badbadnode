@@ -19,16 +19,10 @@ mixin _TabsMixin on _GraphCoreBase {
     final t = title?.trim().isNotEmpty == true
         ? title!.trim()
         : 'Blueprint ${++_bpCounter}';
-    final sw = Stopwatch()..start();
     final id = _openNewBlueprintInternal(
       title: t,
       makeActive: true,
       fireEvents: true,
-    );
-    sw.stop();
-    dev.log(
-      '[perf] GraphController.newBlueprint($id) open+activate=${(sw.elapsedMicroseconds / 1000.0).toStringAsFixed(2)} ms',
-      name: 'badbadnode.perf',
     );
     return id;
   }
@@ -62,15 +56,8 @@ mixin _TabsMixin on _GraphCoreBase {
   /// Switch active blueprint tab.
   void activateBlueprint(String id) {
     if (!_docs.containsKey(id) || id == _activeId) return;
-    final sw = Stopwatch()..start();
     _activeId = id;
     _hub.fire(ActiveBlueprintChanged(id));
-    sw.stop();
-    dev.log(
-      '[perf] GraphController.activateBlueprint(${id.substring(0, 6)}…): '
-      '${sw.elapsedMicroseconds / 1000.0} ms',
-      name: 'badbadnode.perf',
-    );
   }
 
   /// Rename a tab (no IO side-effects).

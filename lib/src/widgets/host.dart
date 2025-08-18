@@ -1,7 +1,6 @@
-// lib/src/widgets/scene/host.dart
+// lib/src/widgets/host.dart
 
 import 'dart:async';
-import 'dart:developer' as dev;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -47,6 +46,7 @@ import '../providers/connection/connection_providers.dart'
 import '../providers/ui/interaction_providers.dart' show nodeDraggingProvider;
 import '../providers/ui/selection_providers.dart' show selectedNodesProvider;
 import '../providers/ui/viewport_provider.dart' show viewportProvider;
+import '../providers/ui/port_position_provider.dart' show portPositionProvider, portPositionsEpochProvider;
 
 // ---- Parts (shared imports live in this file) -------------------------------
 part 'scene/canvas_scene.dart';
@@ -81,7 +81,6 @@ class _HostState extends ConsumerState<Host> {
   final Map<String, ValueNotifier<int>> _repaints = {};
 
   ProviderContainer _createContainer(String tabId) {
-    final sw = Stopwatch()..start();
     final container = ProviderContainer(
       overrides: [
         // Scope the graph to this tab only.
@@ -91,11 +90,6 @@ class _HostState extends ConsumerState<Host> {
       ],
     );
     _containers[tabId] = container;
-    sw.stop();
-    dev.log(
-      '[perf] Host._createContainer($tabId) took ${sw.elapsedMicroseconds / 1000.0} ms',
-      name: 'badbadnode.perf',
-    );
     return container;
   }
 
@@ -124,6 +118,22 @@ class _HostState extends ConsumerState<Host> {
     }
   }
 
+  /// Sanitize stored port positions for [tabId] against the tab's current graph,
+  /// then request a re-measure of surviving ports.
+  void _sanitizePortsForTab(String tabId) {
+    final c = _ensureContainer(tabId);
+    // Read the per-tab graph from its own container scope.
+    final graph = c.read(graphProvider);
+    final nodeIds = graph.nodes.keys.toSet();
+
+    // Drop stale positions (nodes that no longer exist).
+    c.read(portPositionProvider.notifier).pruneByNodeIds(nodeIds);
+
+    // Ask all PortWidgets in this scope to re-measure once post-frame.
+    final epoch = c.read(portPositionsEpochProvider);
+    c.read(portPositionsEpochProvider.notifier).state = epoch + 1;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -139,23 +149,17 @@ class _HostState extends ConsumerState<Host> {
 
     _subs = [
       _graph.on<ActiveBlueprintChanged>().listen((e) {
-        final sw = Stopwatch()..start();
-
         // Ensure a repaint for ProbePaintOnce on the activated tab.
         _ensureRepaint(e.id).value++;
 
         // If the tab’s layout changed while inactive, poke it once.
         if (_layoutDirty[e.id] == true) {
+          _sanitizePortsForTab(e.id); // ← normalize ports on activation
           _bumpTick(e.id);
           _layoutDirty[e.id] = false;
         }
 
         if (mounted) setState(() {});
-        sw.stop();
-        dev.log(
-          '[perf] Host.onActiveBlueprintChanged listener: ${sw.elapsedMilliseconds} ms',
-          name: 'badbadnode.perf',
-        );
       }),
       _graph.on<BlueprintOpened>().listen((e) {
         _ticks.putIfAbsent(e.id, () => 0);
@@ -176,13 +180,17 @@ class _HostState extends ConsumerState<Host> {
         if (mounted) setState(() {});
       }),
       _graph.on<TabGraphChanged>().listen((e) {
-        if (e.id != _graph.activeBlueprintId) {
-          _layoutDirty[e.id] = true;
+        if (e.id == _graph.activeBlueprintId) {
+          _sanitizePortsForTab(e.id); // ← active tab: sanitize immediately
+        } else {
+          _layoutDirty[e.id] = true;  // defer until activation
         }
       }),
       _graph.on<TabGraphCleared>().listen((e) {
-        if (e.id != _graph.activeBlueprintId) {
-          _layoutDirty[e.id] = true;
+        if (e.id == _graph.activeBlueprintId) {
+          _sanitizePortsForTab(e.id); // ← active tab: sanitize immediately
+        } else {
+          _layoutDirty[e.id] = true;  // defer until activation
         }
       }),
     ];
@@ -206,8 +214,6 @@ class _HostState extends ConsumerState<Host> {
 
   @override
   Widget build(BuildContext context) {
-    final sw = Stopwatch()..start();
-
     final tabs = _graph.tabs;
     final activeId = _graph.activeBlueprintId;
     final activeIndex = tabs
@@ -234,23 +240,6 @@ class _HostState extends ConsumerState<Host> {
     }
 
     final stack = IndexedStack(index: activeIndex, children: children);
-
-    sw.stop();
-    dev.log(
-      '[perf] Host.build (on switch): ${sw.elapsedMicroseconds / 1000.0} ms',
-      name: 'badbadnode.perf',
-    );
-
-    // (Optional) Debug: verify viewport does NOT reset on switch
-    final vpNow = _ensureContainer(activeId).read(viewportProvider);
-    if (vpNow != Rect.zero) {
-      final w = vpNow.width.toInt(), h = vpNow.height.toInt();
-      dev.log(
-        '[perf] Host.build active viewport persists: ${w}x$h',
-        name: 'badbadnode.perf',
-      );
-    }
-
     return stack;
   }
 }

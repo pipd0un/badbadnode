@@ -52,10 +52,6 @@ class _CanvasSceneState extends ConsumerState<CanvasScene> {
     if (!_rectNear(rect, _lastViewport)) {
       _lastViewport = rect;
       ref.read(viewportProvider.notifier).state = rect;
-      dev.log(
-        '[perf] ViewportUpdate scene=${rect.width.toInt()}x${rect.height.toInt()}',
-        name: 'badbadnode.perf',
-      );
     }
   }
 
@@ -96,8 +92,6 @@ class _CanvasSceneState extends ConsumerState<CanvasScene> {
     final canvasKey = ref.watch(connectionCanvasKeyProvider);
     final dragging = ref.watch(nodeDraggingProvider);
     final _ = ref.watch(viewportProvider);
-
-    final sw = Stopwatch()..start();
 
     // Detect host size changes WITHOUT scheduling a post-frame every build.
     final child = LayoutBuilder(
@@ -159,13 +153,6 @@ class _CanvasSceneState extends ConsumerState<CanvasScene> {
         );
       },
     );
-
-    sw.stop();
-    dev.log(
-      '[perf] CanvasScene.build: ${sw.elapsedMicroseconds / 1000.0} ms',
-      name: 'badbadnode.perf',
-    );
-
     return child;
   }
 }
