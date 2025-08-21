@@ -1,6 +1,6 @@
 // lib/src/controller/graph_controller.nodes.dart
 
-part of '../graph_controller.dart';
+part of 'graph_controller.core.dart';
 
 // ───────────────── Node CRUD ─────────────────
 

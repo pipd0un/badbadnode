@@ -1,6 +1,6 @@
-// lib/src/controller/graph_controller.io.dart
+// lib/src/core/controller/graph_controller.io.dart
 
-part of '../graph_controller.dart';
+part of 'graph_controller.core.dart';
 
 // ───────────────── JSON I/O + Clear (active tab only) ─────────────────
 
@@ -64,6 +64,37 @@ mixin _IOMixin on _GraphCoreBase {
     final jsonMap =
         jsonDecode(utf8.decode(file!.bytes!)) as Map<String, dynamic>;
     loadJsonMap(jsonMap);
+  }
+
+  // ───────────────── Helpers for project service ─────────────────
+
+  /// Activate a blueprint by id (public in GraphController). This mixin relies
+  /// on GraphController exposing `activateBlueprint(String id)`.
+  void activateBlueprint(String id);
+
+  /// Export the graph JSON for the specified blueprint id, preserving active tab.
+  Map<String, dynamic> exportJsonForBlueprint(String id) {
+    final prev = _activeId;
+    if (prev != id) {
+      activateBlueprint(id);
+    }
+    final data = toJson();
+    if (prev != id) {
+      activateBlueprint(prev);
+    }
+    return data;
+  }
+
+  /// Import the provided graph JSON into the specified blueprint id.
+  void importJsonIntoBlueprint(String id, Map<String, dynamic> json) {
+    final prev = _activeId;
+    if (prev != id) {
+      activateBlueprint(id);
+    }
+    loadJsonMap(json);
+    if (prev != id) {
+      activateBlueprint(prev);
+    }
   }
 
   // ───────────────── Clear All (active tab only) ─────────────────

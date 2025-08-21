@@ -1,6 +1,6 @@
 // lib/src/controller/graph_controller.history.dart
 
-part of '../graph_controller.dart';
+part of 'graph_controller.core.dart';
 
 // ───────────────── undo / redo stack (per tab) ─────────────────
 

@@ -2,7 +2,7 @@
 
 part of '../toolbar.dart';
 
-class _TabChip extends StatefulWidget {
+class _TabChip extends ConsumerStatefulWidget {
   final String id;
   final String title;
   final bool isActive;
@@ -17,10 +17,10 @@ class _TabChip extends StatefulWidget {
   });
 
   @override
-  State<_TabChip> createState() => _TabChipState();
+  ConsumerState<_TabChip> createState() => _TabChipState();
 }
 
-class _TabChipState extends State<_TabChip> {
+class _TabChipState extends ConsumerState<_TabChip> {
   bool _editing = false;
   bool _pressed = false; // immediate visual feedback on pointer down
   late TextEditingController _ctl;
@@ -96,6 +96,13 @@ class _TabChipState extends State<_TabChip> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) setState(() => _pressed = false);
     });
+  }
+
+  Future<void> _beforeCloseHook() async {
+    final hook = ref.read(beforeCloseTabHookProvider);
+    if (hook != null) {
+      await hook(widget.id, widget.title, widget.controller);
+    }
   }
 
   @override
@@ -200,12 +207,10 @@ class _TabChipState extends State<_TabChip> {
                       ),
                     ),
                   const SizedBox(width: 6),
-                  // NEW: explicit edit icon to enter rename mode (replaces double-tap).
+                  // explicit edit icon to enter rename mode (replaces double-tap).
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTapDown: (_) {
-                      // prevent triggering tab switch from this tap
-                    },
+                    onTapDown: (_) {},
                     onTap: _startEdit,
                     child: const Icon(
                       Icons.edit,
@@ -215,7 +220,7 @@ class _TabChipState extends State<_TabChip> {
                   ),
                   const SizedBox(width: 6),
                   GestureDetector(
-                    onTap: () {
+                    onTap: () async {
                       // If the active tab is being closed, switch to the last created remaining tab.
                       final wasActive =
                           widget.controller.activeBlueprintId == widget.id;
@@ -230,6 +235,9 @@ class _TabChipState extends State<_TabChip> {
                           break;
                         }
                       }
+
+                      // Let host app persist snapshot if it wants.
+                      await _beforeCloseHook();
 
                       widget.controller.closeBlueprint(widget.id);
 

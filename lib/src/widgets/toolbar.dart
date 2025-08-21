@@ -5,10 +5,11 @@ import 'dart:convert' show jsonDecode, jsonEncode;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData, LogicalKeyboardKey;
+import 'package:flutter/services.dart'
+    show Clipboard, ClipboardData, LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/graph_controller.dart';
+import '../core/controller/graph_controller.core.dart' show GraphController;
 import '../core/graph_events.dart'
     show
         GraphChanged,
@@ -18,14 +19,18 @@ import '../core/graph_events.dart'
         BlueprintRenamed;
 import '../providers/app_providers.dart' show scaffoldMessengerKeyProvider;
 import '../providers/asset_provider.dart' show assetFilesProvider;
-import '../providers/graph/graph_controller_provider.dart' show graphControllerProvider;
+import '../providers/graph/graph_controller_provider.dart'
+    show graphControllerProvider;
+
+// NEW: decoupled hook for "before close tab" snapshot logic
+import '../providers/hooks.dart' show beforeCloseTabHookProvider;
 import '../providers/ui/selection_providers.dart' show selectedNodesProvider;
 
 part 'toolbar/paste_json_dialog.dart';
 part 'toolbar/toolbar_actions.dart';
 part 'toolbar/tab_strip.dart';
 part 'toolbar/tab_chip.dart';
-part 'toolbar/menu.dart';
+part 'toolbar/thin_divider.dart';
 
 // Heights kept identical to original file to avoid layout changes.
 const double _kTopBarHeight = 32.0; // (top)
@@ -105,14 +110,8 @@ class _ToolbarState extends ConsumerState<Toolbar> {
       title: const Text('BadBad/Node', style: titleStyle),
       titleSpacing: 8,
       actions: [
-        // NEW TAB SECTION (menu)
-        _NewMenu(graph: _graph),
-
-        const _ThinDivider(),
-
         // Main actions (undo/redo, run, select/clear, assets, copy/paste/load)
         ToolbarActions(graph: _graph, isWeb: kIsWeb),
-
         const SizedBox(width: 12),
       ],
       bottom: PreferredSize(

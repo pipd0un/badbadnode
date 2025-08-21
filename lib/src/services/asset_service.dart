@@ -6,7 +6,7 @@ import 'package:file_picker/file_picker.dart';
 /// Select all asset files from
 /// FilePicker without using dart:io, regardless of Web/Mobile, and return the PlatformFile list.
 class AssetService {
-  static const _exts = <String>{'png', 'jpg', 'jpeg', 'mp4', 'mp3'};
+  static const _exts = <String>{'png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'mp4', 'webm', 'mov', 'mkv', 'mp3', 'wav', 'aac', 'm4a', 'ogg', 'flac'};
 
   Future<List<PlatformFile>> pickAllAssets() async {
     // ── Desktop / mobile: pick directory ─────────────────────────────────

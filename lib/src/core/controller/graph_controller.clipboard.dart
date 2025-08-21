@@ -1,6 +1,6 @@
 // lib/src/controller/graph_controller.clipboard.dart
 
-part of '../graph_controller.dart';
+part of 'graph_controller.core.dart';
 
 // ───────────────── Clipboard (shared across tabs) ─────────────────
 

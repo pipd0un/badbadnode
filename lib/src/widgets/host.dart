@@ -1,8 +1,12 @@
 // lib/src/widgets/host.dart
+//
+// Host: entry widget that manages tabs (blueprints) and renders the active
+// CanvasScene. Replaces the old SceneBuilder+TabHost pair.
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // layers
@@ -14,7 +18,7 @@ import 'layers/selection_layer.dart' show SelectionLayer;
 
 // utils
 import 'context_menu_handler.dart' show ContextMenuHandler;
-import '../core/graph_controller.dart' show GraphController;
+import '../core/controller/graph_controller.core.dart' show GraphController;
 
 // events
 import '../core/graph_events.dart'
@@ -26,10 +30,8 @@ import '../core/graph_events.dart'
         TabGraphChanged,
         TabGraphCleared;
 
-import '../painter/grid_painter.dart' 
-    show 
-        GridPainter, 
-        GridPainterCache;
+import '../painter/grid_painter.dart' show GridPainter, GridPainterCache;
+
 import '../providers/graph/graph_state_provider.dart'
     show 
         GraphStateByTabNotifier, 
@@ -46,15 +48,24 @@ import '../providers/connection/connection_providers.dart'
 import '../providers/ui/interaction_providers.dart' show nodeDraggingProvider;
 import '../providers/ui/selection_providers.dart' show selectedNodesProvider;
 import '../providers/ui/viewport_provider.dart' show viewportProvider;
-import '../providers/ui/port_position_provider.dart' show portPositionProvider, portPositionsEpochProvider;
+import '../providers/ui/port_position_provider.dart'
+    show 
+        portPositionProvider, 
+        portPositionsEpochProvider;
+import '../providers/app_providers.dart'
+    show 
+        sidePanelVisibleProvider, 
+        sidePanelWidthProvider;
+import 'panel_host.dart' show SidePanelHost;
+
+// NEW: decoupled host bootstrap hook (apps can override this)
+import '../providers/hooks.dart' show hostInitHookProvider;
 
 // ---- Parts (shared imports live in this file) -------------------------------
 part 'scene/canvas_scene.dart';
 part 'scene/grid_paint_proxy.dart';
 part 'scene/virtualized_canvas.dart';
 
-/// Host: entry widget that manages tabs (blueprints) and renders the active
-/// CanvasScene. Replaces the old SceneBuilder+TabHost pair.
 class Host extends ConsumerStatefulWidget {
   const Host({super.key});
 
@@ -137,8 +148,17 @@ class _HostState extends ConsumerState<Host> {
   @override
   void initState() {
     super.initState();
-    // NOTE: Keeping parity with previous TabHost behavior (direct instance).
+    // Keep parity with previous behavior (direct instance).
     _graph = GraphController();
+
+    // Let host apps bootstrap (e.g., rename initial tab to "main", register panels, etc.)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final hook = ref.read(hostInitHookProvider);
+      if (hook != null) {
+        hook(_graph, ref);
+      }
+    });
 
     // Seed first tab’s container + state
     final active = _graph.activeBlueprintId;
@@ -169,12 +189,23 @@ class _HostState extends ConsumerState<Host> {
         if (mounted) setState(() {});
       }),
       _graph.on<BlueprintClosed>().listen((e) {
+        // IMPORTANT: Delay disposing the ProviderContainer until AFTER the widget
+        // subtree that uses it has been removed from the tree. Disposing it
+        // immediately can race with in-flight pointer/hover events that still
+        // hit the old CanvasScene, causing:
+        //   "Bad state: Tried to read a provider from a ProviderContainer that was already disposed"
         _ticks.remove(e.id);
         _layoutDirty.remove(e.id);
-        GridPainterCache.evict(e.id); // free per-tab grid picture cache
-        _disposeContainer(e.id);
-        _disposeRepaint(e.id);
+
+        // Remove UI first.
         if (mounted) setState(() {});
+
+        // Evict caches and dispose per-tab scopes safely on the next frame.
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          GridPainterCache.evict(e.id);
+          _disposeContainer(e.id);
+          _disposeRepaint(e.id);
+        });
       }),
       _graph.on<BlueprintRenamed>().listen((_) {
         if (mounted) setState(() {});
@@ -183,14 +214,14 @@ class _HostState extends ConsumerState<Host> {
         if (e.id == _graph.activeBlueprintId) {
           _sanitizePortsForTab(e.id); // ← active tab: sanitize immediately
         } else {
-          _layoutDirty[e.id] = true;  // defer until activation
+          _layoutDirty[e.id] = true; // defer until activation
         }
       }),
       _graph.on<TabGraphCleared>().listen((e) {
         if (e.id == _graph.activeBlueprintId) {
           _sanitizePortsForTab(e.id); // ← active tab: sanitize immediately
         } else {
-          _layoutDirty[e.id] = true;  // defer until activation
+          _layoutDirty[e.id] = true; // defer until activation
         }
       }),
     ];
@@ -201,6 +232,7 @@ class _HostState extends ConsumerState<Host> {
     for (final s in _subs) {
       s.cancel();
     }
+    // Dispose remaining containers/repaints.
     for (final c in _containers.values) {
       c.dispose();
     }
@@ -240,6 +272,32 @@ class _HostState extends ConsumerState<Host> {
     }
 
     final stack = IndexedStack(index: activeIndex, children: children);
-    return stack;
+    final showPanel = ref.watch(sidePanelVisibleProvider);
+    final panelWidth = ref.watch(sidePanelWidthProvider);
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Base row lays out the canvas with a left gutter equal to the panel width
+        // so content never extends under the panel.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Reserve space only when panel is visible.
+            if (showPanel) SizedBox(width: panelWidth),
+            Expanded(child: stack),
+          ],
+        ),
+
+        // Always overlay the panel host so the 8px reopen strip remains tappable.
+        Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: showPanel ? panelWidth : 10,
+          child: const SidePanelHost(),
+        ),
+      ],
+    );
   }
 }

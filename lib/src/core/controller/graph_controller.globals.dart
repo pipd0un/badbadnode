@@ -1,6 +1,6 @@
 // lib/src/controller/graph_controller.globals.dart
 
-part of '../graph_controller.dart';
+part of 'graph_controller.core.dart';
 
 // ───────────────── globals (per tab) ─────────────────
 

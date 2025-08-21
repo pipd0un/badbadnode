@@ -8,7 +8,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/graph_controller.dart';
+import '../core/controller/graph_controller.core.dart';
 import '../providers/connection/connection_providers.dart';
 import '../providers/graph/graph_controller_provider.dart';
 import '../providers/ui/canvas_providers.dart';
