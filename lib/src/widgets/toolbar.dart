@@ -18,7 +18,6 @@ import '../core/graph_events.dart'
         BlueprintClosed,
         BlueprintRenamed;
 import '../providers/app_providers.dart' show scaffoldMessengerKeyProvider;
-import '../providers/asset_provider.dart' show assetFilesProvider;
 import '../providers/graph/graph_controller_provider.dart'
     show graphControllerProvider;
 
@@ -111,7 +110,7 @@ class _ToolbarState extends ConsumerState<Toolbar> {
       title: const Text('BadBad/Node', style: titleStyle),
       titleSpacing: 8,
       actions: [
-        // Main actions (undo/redo, run, select/clear, assets, copy/paste/load)
+        // Main actions (undo/redo, run, select/clear, copy/paste/load)
         ToolbarActions(graph: _graph, isWeb: kIsWeb),
         const SizedBox(width: 12),
       ],

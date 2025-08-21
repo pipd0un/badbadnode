@@ -15,7 +15,6 @@ class ToolbarActions extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final messenger = ref.read(scaffoldMessengerKeyProvider);
-    final hasAssets = ref.watch(assetFilesProvider).isNotEmpty;
     const double iconSz = 18.0;
 
     // Helper to read from active canvas container (falls back to root)
@@ -203,29 +202,6 @@ class ToolbarActions extends ConsumerWidget {
             color: Color.fromARGB(255, 255, 119, 230),
           ),
           onPressed: () => graph.pasteClipboard(100, 100),
-        ),
-
-        const _ThinDivider(),
-
-        // ASSETS (toggle)
-        TextButton.icon(
-          icon: Icon(
-            hasAssets ? Icons.eject : Icons.folder_open,
-            color: const Color.fromARGB(255, 255, 119, 230),
-            size: iconSz,
-          ),
-          label: const Text(
-            // thinner label
-            '',
-            style: TextStyle(color: Colors.white, fontSize: 12),
-          ),
-          onPressed: hasAssets
-              ? () => ref.read(assetFilesProvider.notifier).clear()
-              : () => ref.read(assetFilesProvider.notifier).loadAssets(),
-          style: TextButton.styleFrom(
-            minimumSize: const Size(28, 28),
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-          ),
         ),
 
         const _ThinDivider(),

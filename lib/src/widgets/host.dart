@@ -58,11 +58,20 @@ import '../providers/app_providers.dart'
         sidePanelWidthProvider;
 import 'panel_host.dart' show SidePanelHost;
 
-// NEW: decoupled host bootstrap hook (apps can override this)
+// decoupled host bootstrap hook (apps can override this)
 import '../providers/hooks.dart' show hostInitHookProvider;
 
-// NEW: bridge so Toolbar can target the *active canvas* container
+// bridge so Toolbar can target the *active canvas* container
 import '../providers/ui/active_canvas_provider.dart' show ActiveCanvasContainerLink;
+
+// IMPORTANT: Share the *same* asset provider instance across all per-tab
+// ProviderContainers, so mounting/unmounting from the Toolbar (root scope)
+// immediately reflects inside node widgets that live in per-tab scopes.
+import '../providers/asset_provider.dart' show assetFilesProvider;
+
+// ⬇ NEW: bridge panel-published assets to GraphController.globals["assets"]
+import '../services/asset_service.dart' show AssetHub;
+import 'package:file_picker/file_picker.dart' show PlatformFile;
 
 // ---- Parts (shared imports live in this file) -------------------------------
 part 'scene/canvas_scene.dart';
@@ -95,12 +104,15 @@ class _HostState extends ConsumerState<Host> {
   final Map<String, ValueNotifier<int>> _repaints = {};
 
   ProviderContainer _createContainer(String tabId) {
+    final rootAssetsNotifier = ref.read(assetFilesProvider.notifier);
     final container = ProviderContainer(
       overrides: [
         // Scope the graph to this tab only.
         graphProvider.overrideWith(
           (ref) => GraphStateByTabNotifier(_graph, tabId),
         ),
+        // Share assets globally across all tabs/containers.
+        assetFilesProvider.overrideWith((ref) => rootAssetsNotifier),
       ],
     );
     _containers[tabId] = container;
@@ -152,11 +164,24 @@ class _HostState extends ConsumerState<Host> {
     ActiveCanvasContainerLink.instance.container = _ensureContainer(id);
   }
 
+  List<PlatformFile> _platformAssetsFromHub() => [
+        for (final m in AssetHub.instance.assets)
+          PlatformFile(
+            name: m.fileName,
+            path: m.path,
+            size: m.size ?? (m.bytes?.length ?? 0),
+            bytes: m.bytes, // ← crucial for Web/MemoryImage
+          ),
+      ];
+
   @override
   void initState() {
     super.initState();
     // Keep parity with previous behavior (direct instance).
     _graph = GraphController();
+
+    // ⬇ Seed globals["assets"] once at startup (PlatformFile list for legacy nodes).
+    _graph.setGlobal('assets', _platformAssetsFromHub());
 
     // Let host apps bootstrap (e.g., rename initial tab to "main", register panels, etc.)
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -176,6 +201,12 @@ class _HostState extends ConsumerState<Host> {
     _updateActiveContainerLink(active); // <<< bridge: expose active canvas container
 
     _subs = [
+      // ⬇ Keep GraphController.globals["assets"] in sync with panel assets.
+      AssetHub.instance.changes.listen((_) {
+        _graph.setGlobal('assets', _platformAssetsFromHub());
+        // Evaluator also refreshes this on each run; this makes it visible to nodes that read globals directly.
+      }),
+
       _graph.on<ActiveBlueprintChanged>().listen((e) {
         // Ensure a repaint for ProbePaintOnce on the activated tab.
         _ensureRepaint(e.id).value++;

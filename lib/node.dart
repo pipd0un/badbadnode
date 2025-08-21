@@ -23,8 +23,14 @@ export 'src/providers/panel_provider.dart' show panelAppsProvider, activePanelId
 export 'src/panel_api.dart'
     show
         PanelApp,
+        Panels,
+        AssetMeta,
         registerPanelApp,
         unregisterPanelApp,
+        panelPublishAssets,
+        panelClearAssets,
+        panelAddAsset,
+        panelRemoveAssetByPath,
         activatePanel;
 
 export 'src/providers/hooks.dart'

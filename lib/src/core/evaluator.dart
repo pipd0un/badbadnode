@@ -1,4 +1,4 @@
-// lib/core/evaluator.dart
+// lib/src/core/evaluator.dart
 import 'dart:async';
 import 'dart:collection' show Queue;
 
@@ -6,6 +6,8 @@ import 'controller/graph_controller.core.dart';
 import '../models/node.dart';
 import '../models/connection.dart';
 import '../nodes/node_definition.dart' show NodeDefinition, NodeRegistry;
+import '../services/asset_service.dart' show AssetHub, AssetMeta; // panel assets
+import 'package:file_picker/file_picker.dart' show PlatformFile; // normalize for legacy nodes
 
 /// Runtime callback signature for every node type.
 typedef NodeExecutor = Future<dynamic> Function(Node node, GraphEvaluator ev);
@@ -21,6 +23,20 @@ class GraphEvaluator {
   Map<String, dynamic> get _globals => graph.globals;
   void setObject(String k, dynamic v) => _globals[k] = v;
   dynamic getObject(String k) => _globals[k];
+
+  /// Read-only snapshot of panel-published assets (rich meta).
+  List<AssetMeta> get assets => AssetHub.instance.assets;
+
+  /// Legacy/compat snapshot as PlatformFile list (what older nodes used).
+  List<PlatformFile> get assetsAsPlatformFiles => [
+        for (final m in AssetHub.instance.assets)
+          PlatformFile(
+            name: m.fileName,
+            path: m.path,
+            size: m.size ?? (m.bytes?.length ?? 0),
+            bytes: m.bytes, // ← provide bytes for MemoryImage on Web
+          ),
+      ];
 
   // inside GraphEvaluator
   final Map<String, NodeDefinition> _defCache = {};
@@ -132,15 +148,21 @@ class GraphEvaluator {
 
     // 3️⃣  scratch values no longer needed
     _values.clear();
+
+    // Keep legacy/global-aware nodes in sync at bootstrap (PlatformFile list).
+    setObject('assets', assetsAsPlatformFiles);
+
     graph.globalsBootstrapped = true;
   }
-
 
   /*──────────────────── FULL GRAPH RUN ───────────────────────*/
   Future<Map<String, dynamic>> run() async {
     _values.clear();
     _ranInLoop.clear();
     await _ensureGlobals();
+
+    // Ensure globals["assets"] reflect the latest panel snapshot on each run.
+    setObject('assets', assetsAsPlatformFiles);
 
     final executedCmd = <String>{};
     final topo = _topoSort();
@@ -179,6 +201,10 @@ class GraphEvaluator {
     _values.clear();
     _ranInLoop.clear();
     await _ensureGlobals();
+
+    // Keep assets fresh for partial runs too.
+    setObject('assets', assetsAsPlatformFiles);
+
     _buildAdjacency();
 
     final needed = <String>{};

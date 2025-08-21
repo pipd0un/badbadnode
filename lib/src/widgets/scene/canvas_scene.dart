@@ -153,6 +153,19 @@ class _CanvasSceneState extends ConsumerState<CanvasScene> {
         );
       },
     );
-    return child;
+
+    // IMPORTANT:
+    // Wrap the canvas subtree in a *nested* Navigator so any routes pushed from
+    // inside the canvas (e.g., ACustomScreen from a node body) get pushed onto
+    // this local Navigator. This ensures they inherit the same ProviderContainer
+    // as the active canvas tab (the UncontrolledProviderScope created per-tab),
+    // fixing cases where screens couldn’t see state set in the canvas container
+    // (e.g., "No VNScene injected yet").
+    return Navigator(
+      key: ValueKey('canvas_nav_${widget.tabId}'),
+      onGenerateInitialRoutes: (navigator, initialRoute) => [
+        MaterialPageRoute(builder: (_) => child, settings: const RouteSettings(name: 'canvas')),
+      ],
+    );
   }
 }
