@@ -1,4 +1,7 @@
 // lib/src/widgets/toolbar/toolbar_actions.dart
+//
+// ToolbarActions buttons, routed to the *active canvas ProviderContainer*
+// so actions like "Select All" affect the correct tab-scoped providers.
 
 part of '../toolbar.dart';
 
@@ -15,36 +18,54 @@ class ToolbarActions extends ConsumerWidget {
     final hasAssets = ref.watch(assetFilesProvider).isNotEmpty;
     const double iconSz = 18.0;
 
-    Future<void> handlePasteJson() async {
-      if (isWeb) {
-        final result = await showPasteJsonDialog(context);
-        if (result == null) return;
+    // Helper to read from active canvas container (falls back to root)
+    T inActiveContainer<T>({
+      required T Function(ProviderContainer c) fn,
+      required T Function() fallback,
+    }) {
+      return ActiveCanvasContainerLink.instance.withActive(
+        fn: fn,
+        fallback: fallback,
+      );
+    }
 
-        try {
-          final parsed = jsonDecode(result);
-          if (parsed is! Map ||
-              parsed['nodes'] is! List ||
-              parsed['connections'] is! List) {
+    Set<String> currentSelection() {
+      return inActiveContainer<Set<String>>(
+        fn: (c) => c.read(selectedNodesProvider),
+        fallback: () => ref.read(selectedNodesProvider),
+      );
+    }
+
+    void setSelection(Set<String> ids) {
+      inActiveContainer<void>(
+        fn: (c) {
+          final n = c.read(selectedNodesProvider.notifier);
+          // Works for both Notifier<T> and StateNotifier<T>
+          // ignore: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
+          n.state = ids;
+        },
+        fallback: () {
+          final n = ref.read(selectedNodesProvider.notifier);
+          // ignore: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
+          n.state = ids;
+        },
+      );
+    }
+
+    Future<void> pasteJsonFromClipboard() async {
+      try {
+        if (isWeb) {
+          final pasted = await showPasteJsonDialog(context);
+          if (pasted == null || pasted.trim().isEmpty) return;
+          final raw = jsonDecode(pasted);
+          if (raw is! Map ||
+              raw['nodes'] is! List ||
+              raw['connections'] is! List) {
             throw const FormatException('Missing "nodes" or "connections"');
           }
-          graph.loadJsonMap(parsed.cast<String, dynamic>());
-          messenger.currentState?.showSnackBar(
-            const SnackBar(
-              content: Text('JSON loaded from dialog'),
-              duration: Duration(milliseconds: 600),
-            ),
-          );
-        } catch (e) {
-          messenger.currentState?.showSnackBar(
-            SnackBar(
-              content: Text('Invalid JSON: $e'),
-              duration: const Duration(milliseconds: 1200),
-            ),
-          );
-        }
-      } else {
-        final data = await Clipboard.getData('text/plain');
-        try {
+          graph.loadJsonMap(raw.cast<String, dynamic>());
+        } else {
+          final data = await Clipboard.getData('text/plain');
           final raw = jsonDecode(data?.text ?? '{}');
           if (raw is! Map ||
               raw['nodes'] is! List ||
@@ -52,20 +73,20 @@ class ToolbarActions extends ConsumerWidget {
             throw const FormatException('Missing "nodes" or "connections"');
           }
           graph.loadJsonMap(raw.cast<String, dynamic>());
-          messenger.currentState?.showSnackBar(
-            const SnackBar(
-              content: Text('JSON loaded'),
-              duration: Duration(milliseconds: 500),
-            ),
-          );
-        } catch (e) {
-          messenger.currentState?.showSnackBar(
-            SnackBar(
-              content: Text('Invalid JSON: $e'),
-              duration: const Duration(milliseconds: 1000),
-            ),
-          );
         }
+        messenger.currentState?.showSnackBar(
+          const SnackBar(
+            content: Text('JSON loaded'),
+            duration: Duration(milliseconds: 600),
+          ),
+        );
+      } catch (e) {
+        messenger.currentState?.showSnackBar(
+          SnackBar(
+            content: Text('Invalid JSON: $e'),
+            duration: const Duration(milliseconds: 1200),
+          ),
+        );
       }
     }
 
@@ -102,17 +123,18 @@ class ToolbarActions extends ConsumerWidget {
           ),
           onPressed: () async {
             await graph.evaluate();
-            ref.read(scaffoldMessengerKeyProvider).currentState?.showSnackBar(
-                  const SnackBar(
-                    content: Text('Evaluation finished'),
-                    duration: Duration(milliseconds: 500),
-                  ),
-                );
+            messenger.currentState?.showSnackBar(
+              const SnackBar(
+                content: Text('Evaluation finished'),
+                duration: Duration(milliseconds: 500),
+              ),
+            );
           },
         ),
 
         const _ThinDivider(),
 
+        // SELECT ALL
         IconButton(
           iconSize: iconSz,
           tooltip: 'Select All',
@@ -120,10 +142,12 @@ class ToolbarActions extends ConsumerWidget {
             Icons.select_all,
             color: Color.fromARGB(255, 255, 119, 230),
           ),
-          onPressed: () => ref
-              .read(selectedNodesProvider.notifier)
-              .selectAll(graph.nodes.keys.toList()),
+          onPressed: () {
+            setSelection(graph.nodes.keys.toSet());
+          },
         ),
+
+        // CLEAR ALL
         IconButton(
           iconSize: iconSz,
           tooltip: 'Clear All',
@@ -133,12 +157,57 @@ class ToolbarActions extends ConsumerWidget {
           ),
           onPressed: () {
             graph.clear();
-            ref.read(selectedNodesProvider.notifier).clear();
+            setSelection(<String>{});
           },
         ),
 
         const _ThinDivider(),
 
+        // COPY
+        IconButton(
+          iconSize: iconSz,
+          tooltip: 'Copy',
+          icon: const Icon(
+            Icons.copy,
+            color: Color.fromARGB(255, 255, 119, 230),
+          ),
+          onPressed: () {
+            final sel = currentSelection();
+            if (sel.isEmpty) return;
+            graph.copyNodes(sel);
+          },
+        ),
+
+        // CUT
+        IconButton(
+          iconSize: iconSz,
+          tooltip: 'Cut',
+          icon: const Icon(
+            Icons.content_cut,
+            color: Color.fromARGB(255, 255, 119, 230),
+          ),
+          onPressed: () {
+            final sel = currentSelection();
+            if (sel.isEmpty) return;
+            graph.cutNodes(sel);
+            setSelection(<String>{});
+          },
+        ),
+
+        // PASTE
+        IconButton(
+          iconSize: iconSz,
+          tooltip: 'Paste (into active tab)',
+          icon: const Icon(
+            Icons.paste,
+            color: Color.fromARGB(255, 255, 119, 230),
+          ),
+          onPressed: () => graph.pasteClipboard(100, 100),
+        ),
+
+        const _ThinDivider(),
+
+        // ASSETS (toggle)
         TextButton.icon(
           icon: Icon(
             hasAssets ? Icons.eject : Icons.folder_open,
@@ -161,6 +230,7 @@ class ToolbarActions extends ConsumerWidget {
 
         const _ThinDivider(),
 
+        // COPY JSON
         IconButton(
           iconSize: iconSz,
           tooltip: 'Copy JSON',
@@ -170,15 +240,16 @@ class ToolbarActions extends ConsumerWidget {
           ),
           onPressed: () {
             Clipboard.setData(ClipboardData(text: jsonEncode(graph.toJson())));
-            ref.read(scaffoldMessengerKeyProvider).currentState?.showSnackBar(
-                  const SnackBar(
-                    content: Text('Blueprint copied'),
-                    duration: Duration(milliseconds: 500),
-                  ),
-                );
+            messenger.currentState?.showSnackBar(
+              const SnackBar(
+                content: Text('Blueprint copied'),
+                duration: Duration(milliseconds: 500),
+              ),
+            );
           },
         ),
 
+        // PASTE JSON
         IconButton(
           iconSize: iconSz,
           tooltip: 'Paste JSON',
@@ -186,9 +257,10 @@ class ToolbarActions extends ConsumerWidget {
             Icons.paste,
             color: Color.fromARGB(255, 255, 119, 230),
           ),
-          onPressed: handlePasteJson,
+          onPressed: pasteJsonFromClipboard,
         ),
 
+        // LOAD JSON (file)
         IconButton(
           iconSize: iconSz,
           tooltip: 'Load JSON',
@@ -198,12 +270,12 @@ class ToolbarActions extends ConsumerWidget {
           ),
           onPressed: () async {
             await graph.loadJsonFromFile();
-            ref.read(scaffoldMessengerKeyProvider).currentState?.showSnackBar(
-                  const SnackBar(
-                    content: Text('File loaded'),
-                    duration: Duration(milliseconds: 500),
-                  ),
-                );
+            messenger.currentState?.showSnackBar(
+              const SnackBar(
+                content: Text('File loaded'),
+                duration: Duration(milliseconds: 500),
+              ),
+            );
           },
         ),
       ],

@@ -24,6 +24,7 @@ import '../providers/graph/graph_controller_provider.dart'
 
 // NEW: decoupled hook for "before close tab" snapshot logic
 import '../providers/hooks.dart' show beforeCloseTabHookProvider;
+import '../providers/ui/active_canvas_provider.dart' show ActiveCanvasContainerLink;
 import '../providers/ui/selection_providers.dart' show selectedNodesProvider;
 
 part 'toolbar/paste_json_dialog.dart';

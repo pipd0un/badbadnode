@@ -61,6 +61,9 @@ import 'panel_host.dart' show SidePanelHost;
 // NEW: decoupled host bootstrap hook (apps can override this)
 import '../providers/hooks.dart' show hostInitHookProvider;
 
+// NEW: bridge so Toolbar can target the *active canvas* container
+import '../providers/ui/active_canvas_provider.dart' show ActiveCanvasContainerLink;
+
 // ---- Parts (shared imports live in this file) -------------------------------
 part 'scene/canvas_scene.dart';
 part 'scene/grid_paint_proxy.dart';
@@ -145,6 +148,10 @@ class _HostState extends ConsumerState<Host> {
     c.read(portPositionsEpochProvider.notifier).state = epoch + 1;
   }
 
+  void _updateActiveContainerLink(String id) {
+    ActiveCanvasContainerLink.instance.container = _ensureContainer(id);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -166,11 +173,15 @@ class _HostState extends ConsumerState<Host> {
     _layoutDirty[active] = false;
     _ensureContainer(active);
     _ensureRepaint(active);
+    _updateActiveContainerLink(active); // <<< bridge: expose active canvas container
 
     _subs = [
       _graph.on<ActiveBlueprintChanged>().listen((e) {
         // Ensure a repaint for ProbePaintOnce on the activated tab.
         _ensureRepaint(e.id).value++;
+
+        // Bridge: make Toolbar target the correct container.
+        _updateActiveContainerLink(e.id);
 
         // If the tab’s layout changed while inactive, poke it once.
         if (_layoutDirty[e.id] == true) {
@@ -186,6 +197,10 @@ class _HostState extends ConsumerState<Host> {
         _layoutDirty.putIfAbsent(e.id, () => false);
         _ensureContainer(e.id);
         _ensureRepaint(e.id);
+
+        // If newly opened is also active (typical), update the bridge.
+        _updateActiveContainerLink(_graph.activeBlueprintId);
+
         if (mounted) setState(() {});
       }),
       _graph.on<BlueprintClosed>().listen((e) {
@@ -205,6 +220,9 @@ class _HostState extends ConsumerState<Host> {
           GridPainterCache.evict(e.id);
           _disposeContainer(e.id);
           _disposeRepaint(e.id);
+
+          // After close, ensure the bridge points at the current active tab.
+          _updateActiveContainerLink(_graph.activeBlueprintId);
         });
       }),
       _graph.on<BlueprintRenamed>().listen((_) {
@@ -241,6 +259,10 @@ class _HostState extends ConsumerState<Host> {
     }
     _containers.clear();
     _repaints.clear();
+
+    // Clear bridge
+    ActiveCanvasContainerLink.instance.container = null;
+
     super.dispose();
   }
 
