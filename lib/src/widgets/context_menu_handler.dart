@@ -1,4 +1,4 @@
-// lib/widgets/context_menu_handler.dart
+// lib/src/widgets/context_menu_handler.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter_context_menu/flutter_context_menu.dart';
@@ -17,6 +17,21 @@ class ContextMenuHandler extends ConsumerWidget {
     required this.canvasKey,
     required this.child,
   });
+
+  // Convert global screen coordinates to **root Overlay** local coordinates
+  // and return both the overlay context and local offset.
+  (BuildContext overlayCtx, Offset local) _rootOverlayAndLocal(
+    BuildContext context,
+    Offset global,
+  ) {
+    final overlayState = Overlay.of(context, rootOverlay: true);
+    final overlayCtx = overlayState.context;
+    final ro = overlayCtx.findRenderObject();
+    if (ro is RenderBox) {
+      return (overlayCtx, ro.globalToLocal(global));
+    }
+    return (overlayCtx, global);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -73,10 +88,13 @@ class ContextMenuHandler extends ConsumerWidget {
         );
       }
 
+      // Anchor to **root** overlay for accurate positioning.
+      final (ovCtx, ovLocal) = _rootOverlayAndLocal(context, gPos);
+
       await showContextMenu(
-        context,
+        ovCtx,
         contextMenu: ContextMenu(
-          position: gPos,
+          position: ovLocal,
           entries: <ContextMenuEntry>[
             const _Title(text: 'Foundation ©'),
             MenuDivider(),
@@ -106,10 +124,12 @@ class ContextMenuHandler extends ConsumerWidget {
           ..select(node.id);
       }
 
+      final (ovCtx, ovLocal) = _rootOverlayAndLocal(context, gPos);
+
       await showContextMenu(
-        context,
+        ovCtx,
         contextMenu: ContextMenu(
-          position: gPos,
+          position: ovLocal,
           entries: <ContextMenuEntry>[
             MenuItem(
               label: 'Cut',
