@@ -5,21 +5,12 @@
 
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart' show PlatformFile;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// layers
-import 'layers/wires_layer.dart' show WiresLayer;
-import 'layers/nodes_layer.dart' show NodesLayer;
-import 'layers/viewer_layer.dart' show ViewerLayer;
-import 'layers/preview_layer.dart' show PreviewLayer;
-import 'layers/selection_layer.dart' show SelectionLayer;
-
-// utils
-import 'context_menu_handler.dart' show ContextMenuHandler;
 import '../core/controller/graph_controller.core.dart' show GraphController;
-
 // events
 import '../core/graph_events.dart'
     show
@@ -29,49 +20,52 @@ import '../core/graph_events.dart'
         BlueprintRenamed,
         TabGraphChanged,
         TabGraphCleared;
-
 import '../painter/grid_painter.dart' show GridPainter, GridPainterCache;
-
+import '../providers/app_providers.dart'
+    show 
+        sidePanelVisibleProvider, 
+        sidePanelWidthProvider;
+// IMPORTANT: Share the *same* asset provider instance across all per-tab
+// ProviderContainers, so mounting/unmounting from the Toolbar (root scope)
+// immediately reflects inside node widgets that live in per-tab scopes.
+import '../providers/asset_provider.dart' show assetFilesProvider;
+import '../providers/connection/connection_providers.dart'
+    show 
+        connectionStartPortProvider, 
+        connectionDragPosProvider;
 import '../providers/graph/graph_state_provider.dart'
     show 
         GraphStateByTabNotifier, 
         graphProvider;
+// decoupled host bootstrap hook (apps can override this)
+import '../providers/hooks.dart' show hostInitHookProvider;
+// bridge so Toolbar can target the *active canvas* container
+import '../providers/ui/active_canvas_provider.dart' show ActiveCanvasContainerLink;
 import '../providers/ui/canvas_providers.dart'
     show
         activeCanvasTickProvider,
         connectionCanvasKeyProvider,
         canvasScaleProvider;
-import '../providers/connection/connection_providers.dart'
-    show 
-        connectionStartPortProvider, 
-        connectionDragPosProvider;
 import '../providers/ui/interaction_providers.dart' show nodeDraggingProvider;
-import '../providers/ui/selection_providers.dart' show selectedNodesProvider;
-import '../providers/ui/viewport_provider.dart' show viewportProvider;
 import '../providers/ui/port_position_provider.dart'
     show 
         portPositionProvider, 
         portPositionsEpochProvider;
-import '../providers/app_providers.dart'
-    show 
-        sidePanelVisibleProvider, 
-        sidePanelWidthProvider;
-import 'panel_host.dart' show SidePanelHost;
-
-// decoupled host bootstrap hook (apps can override this)
-import '../providers/hooks.dart' show hostInitHookProvider;
-
-// bridge so Toolbar can target the *active canvas* container
-import '../providers/ui/active_canvas_provider.dart' show ActiveCanvasContainerLink;
-
-// IMPORTANT: Share the *same* asset provider instance across all per-tab
-// ProviderContainers, so mounting/unmounting from the Toolbar (root scope)
-// immediately reflects inside node widgets that live in per-tab scopes.
-import '../providers/asset_provider.dart' show assetFilesProvider;
-
+import '../providers/ui/selection_providers.dart' show selectedNodesProvider;
+import '../providers/ui/viewport_provider.dart' show viewportProvider;
 // ⬇ NEW: bridge panel-published assets to GraphController.globals["assets"]
 import '../services/asset_service.dart' show AssetHub;
-import 'package:file_picker/file_picker.dart' show PlatformFile;
+// ⬇ NEW: page embedder (custom tab pages)
+import '../services/page_embedder.dart' show PageEmbedder;
+// utils
+import 'context_menu_handler.dart' show ContextMenuHandler;
+import 'layers/nodes_layer.dart' show NodesLayer;
+import 'layers/preview_layer.dart' show PreviewLayer;
+import 'layers/selection_layer.dart' show SelectionLayer;
+import 'layers/viewer_layer.dart' show ViewerLayer;
+// layers
+import 'layers/wires_layer.dart' show WiresLayer;
+import 'panel_host.dart' show SidePanelHost;
 
 // ---- Parts (shared imports live in this file) -------------------------------
 part 'scene/canvas_scene.dart';
@@ -103,18 +97,31 @@ class _HostState extends ConsumerState<Host> {
   /// so ProbePaintOnce always runs.
   final Map<String, ValueNotifier<int>> _repaints = {};
 
+  ProviderContainer? _rootContainer;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Capture the root container once and reuse it
+    _rootContainer ??= ProviderScope.containerOf(context, listen: false);
+  }
+
   ProviderContainer _createContainer(String tabId) {
     final rootAssetsNotifier = ref.read(assetFilesProvider.notifier);
+
     final container = ProviderContainer(
+      // 👈 CRITICAL: share providers with the app’s root scope
+      parent: _rootContainer,
       overrides: [
-        // Scope the graph to this tab only.
+        // Keep graph scoped per tab
         graphProvider.overrideWith(
           (ref) => GraphStateByTabNotifier(_graph, tabId),
         ),
-        // Share assets globally across all tabs/containers.
+        // Share the SAME asset notifier instance across tabs
         assetFilesProvider.overrideWith((ref) => rootAssetsNotifier),
       ],
     );
+
     _containers[tabId] = container;
     return container;
   }
@@ -192,6 +199,9 @@ class _HostState extends ConsumerState<Host> {
       }
     });
 
+    // ⬇ Attach graph to the PageEmbedder so page API can open tabs at runtime.
+    PageEmbedder.instance.attachGraph(_graph);
+
     // Seed first tab’s container + state
     final active = _graph.activeBlueprintId;
     _ticks[active] = 0;
@@ -235,6 +245,9 @@ class _HostState extends ConsumerState<Host> {
         if (mounted) setState(() {});
       }),
       _graph.on<BlueprintClosed>().listen((e) {
+        // Keep PageEmbedder registry in sync.
+        PageEmbedder.instance.onTabClosed(e.id);
+
         // IMPORTANT: Delay disposing the ProviderContainer until AFTER the widget
         // subtree that uses it has been removed from the tree. Disposing it
         // immediately can race with in-flight pointer/hover events that still
@@ -257,6 +270,8 @@ class _HostState extends ConsumerState<Host> {
         });
       }),
       _graph.on<BlueprintRenamed>().listen((_) {
+        // Title in Toolbar updates via controller; page context title is best-effort.
+        // (We don't depend on event payload here since Host didn't either.)
         if (mounted) setState(() {});
       }),
       _graph.on<TabGraphChanged>().listen((e) {
@@ -291,8 +306,9 @@ class _HostState extends ConsumerState<Host> {
     _containers.clear();
     _repaints.clear();
 
-    // Clear bridge
+    // Clear bridges
     ActiveCanvasContainerLink.instance.container = null;
+    PageEmbedder.instance.detachGraph();
 
     super.dispose();
   }
@@ -311,6 +327,13 @@ class _HostState extends ConsumerState<Host> {
       final container = _ensureContainer(id);
       final repaint = _ensureRepaint(id);
 
+      // Decide per-tab renderer: custom page vs canvas scene.
+      final pageCtx = PageEmbedder.instance.contextForTab(id);
+      final isPage = pageCtx != null;
+      final Widget tabChild = isPage
+          ? _CustomPageScene(tabId: id) // uses the same per-tab ProviderContainer
+          : CanvasScene(tabId: id, repaint: repaint);
+
       children.add(
         // Keep each tab’s provider container alive across switches.
         UncontrolledProviderScope(
@@ -318,7 +341,7 @@ class _HostState extends ConsumerState<Host> {
           container: container,
           child: TickerMode(
             enabled: i == activeIndex,
-            child: CanvasScene(tabId: id, repaint: repaint),
+            child: tabChild,
           ),
         ),
       );
@@ -352,5 +375,30 @@ class _HostState extends ConsumerState<Host> {
         ),
       ],
     );
+  }
+}
+
+/// Hosts a custom page inside a tab, using the registered PageBuilder.
+class _CustomPageScene extends ConsumerWidget {
+  final String tabId;
+  const _CustomPageScene({required this.tabId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ctx = PageEmbedder.instance.contextForTab(tabId);
+    if (ctx == null) {
+      // Fallback to an empty box if the page got unregistered mid-flight.
+      return const SizedBox.expand();
+    }
+    final builder = PageEmbedder.instance.builderForKind(ctx.kind);
+    if (builder == null) {
+      return const Center(
+        child: Text(
+          'No renderer registered for this page kind.',
+          style: TextStyle(color: Colors.white70),
+        ),
+      );
+    }
+    return builder(context, ref, ctx);
   }
 }

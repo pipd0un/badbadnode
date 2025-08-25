@@ -33,6 +33,15 @@ export 'src/panel_api.dart'
         panelRemoveAssetByPath,
         activatePanel;
 
+export 'src/page_api.dart'
+    show
+        PageTabContext,
+        PageBuilder,
+        registerPageRenderer,
+        unregisterPageRenderer,
+        openPageTab,
+        markTabAsPage;
+
 export 'src/providers/hooks.dart'
     show
         BeforeCloseTabHook,
