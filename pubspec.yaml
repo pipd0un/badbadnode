@@ -2,7 +2,7 @@ name: badbad
 description: ">
   A surreal and extensible Flutter-based node editor for creative automation, graph logic, and visual workflows.
   Built for developers who dream in wires and abstractions. Open source. Plugin-friendly. Flutter Web-first."
-version: 0.5.1+1
+version: 0.5.3.1+1
 homepage:
 
 environment:

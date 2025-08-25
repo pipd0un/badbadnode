@@ -16,7 +16,7 @@ export 'src/widgets/node_widget.dart' show GenericNodeWidget;
 export 'src/widgets/host.dart' show Host;
 export 'src/widgets/toolbar.dart' show Toolbar;
 
-export 'src/providers/app_providers.dart' show scaffoldMessengerKeyProvider;
+export 'src/providers/app_providers.dart';
 export 'src/providers/asset_provider.dart' show assetFilesProvider;
 export 'src/providers/panel_provider.dart' show panelAppsProvider, activePanelIdProvider;
 
