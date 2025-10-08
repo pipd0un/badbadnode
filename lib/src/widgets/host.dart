@@ -108,6 +108,7 @@ class _HostState extends ConsumerState<Host> {
 
   ProviderContainer _createContainer(String tabId) {
     final rootAssetsNotifier = ref.read(assetFilesProvider.notifier);
+    final canvasKey = GlobalKey(); // unique per tab to avoid GlobalKey collisions
 
     final container = ProviderContainer(
       // 👈 CRITICAL: share providers with the app’s root scope
@@ -119,6 +120,8 @@ class _HostState extends ConsumerState<Host> {
         ),
         // Share the SAME asset notifier instance across tabs
         assetFilesProvider.overrideWith((ref) => rootAssetsNotifier),
+        // Provide a per-tab canvas key so multiple canvases don't reuse one GlobalKey.
+        connectionCanvasKeyProvider.overrideWithValue(canvasKey),
       ],
     );
 
