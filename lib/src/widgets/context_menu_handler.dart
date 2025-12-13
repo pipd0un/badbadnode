@@ -53,7 +53,7 @@ class ContextMenuHandler extends ConsumerWidget {
       if (box == null) return;
 
       const primitives = ['number', 'string', 'list'];
-      const ops = ['operator', 'comparator', 'if', 'loop'];
+      const ops = ['operator', 'comparator', 'if', 'switch', 'loop'];
       const dev = ['print', 'sink', 'note'];
       const global = ['object', 'getter', 'setter'];
 

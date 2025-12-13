@@ -121,13 +121,31 @@ class ToolbarActions extends ConsumerWidget {
             color: Color.fromARGB(255, 255, 119, 230),
           ),
           onPressed: () async {
-            await graph.evaluate();
-            messenger.currentState?.showSnackBar(
-              const SnackBar(
-                content: Text('Evaluation finished'),
-                duration: Duration(milliseconds: 500),
-              ),
-            );
+            try {
+              await graph.evaluate();
+              messenger.currentState?.showSnackBar(
+                const SnackBar(
+                  content: Text('Evaluation finished'),
+                  duration: Duration(milliseconds: 500),
+                ),
+              );
+            } catch (e) {
+              await showDialog<void>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Evaluation error'),
+                  content: SingleChildScrollView(
+                    child: Text('$e'),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('OK'),
+                    ),
+                  ],
+                ),
+              );
+            }
           },
         ),
 

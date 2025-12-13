@@ -15,6 +15,7 @@ import 'fundamentals/string_node.dart' show StringNode;
 import 'fundamentals/object_node.dart' show ObjectNode;
 import 'fundamentals/getter_node.dart' show GetterNode;
 import 'fundamentals/setter_node.dart' show SetterNode;
+import 'fundamentals/switch_node.dart' show SwitchNode;
 import 'node_definition.dart';
 
 void registerBuiltInNodes() {
@@ -31,5 +32,6 @@ void registerBuiltInNodes() {
     ..register(LoopNode())
     ..register(ObjectNode())
     ..register(GetterNode())
-    ..register(SetterNode());
+    ..register(SetterNode())
+    ..register(SwitchNode());
 }
