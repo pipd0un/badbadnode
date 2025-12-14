@@ -13,6 +13,10 @@ class CanvasScene extends ConsumerStatefulWidget {
 }
 
 class _CanvasSceneState extends ConsumerState<CanvasScene> {
+  // Fixed logical canvas size; large enough for typical blueprints.
+  static const double _sceneWidth = 5000.0;
+  static const double _sceneHeight = 10000.0;
+
   final TransformationController _tc = TransformationController();
 
   Rect _lastViewport = Rect.zero;
@@ -84,15 +88,12 @@ class _CanvasSceneState extends ConsumerState<CanvasScene> {
         box.globalToLocal(globalPos);
   }
 
-  /// Dynamically compute a growable canvas size based on:
-  ///  • current viewport (so panning/zooming never shows empty space)
-  ///  • current node extents (so dropping/placing far away expands the sheet)
+  /// Compute a canvas size that grows to fit the furthest node, but never
+  /// shrinks below the fixed base size. This runs only on occasional rebuilds
+  /// (drag start/end, host resize), so it doesn't affect pan smoothness.
   Size _computeSceneSize() {
-    // Read graph + viewport
     final graph = ref.read(graphProvider);
-    final vp = ref.read(viewportProvider);
 
-    // Scan node extents (only x/y are used; width/height are padded generously)
     double maxX = 0.0, maxY = 0.0;
     for (final n in graph.nodes.values) {
       final x = (n.data['x'] as num?)?.toDouble() ?? 0.0;
@@ -101,32 +102,14 @@ class _CanvasSceneState extends ConsumerState<CanvasScene> {
       if (y > maxY) maxY = y;
     }
 
-    // Heuristics:
-    //   • NodeWidget nominal width: ~160
-    //   • Add generous headroom so we don't resize every few pixels during edits
-    const double nodeWidthGuess = 160.0;
-    const double headroom = 2000.0; // extra space beyond furthest content
+    // Extra padding beyond the furthest node so you can keep building outward.
+    const double paddingX = 1000.0;
+    const double paddingY = 1000.0;
 
-    // Minimums driven by what's currently visible on screen
-    final double minWFromViewport =
-        (vp.isEmpty ? _lastHostSize.width : vp.right) + headroom * 0.5;
-    final double minHFromViewport =
-        (vp.isEmpty ? _lastHostSize.height : vp.bottom) + headroom * 0.5;
-
-    // Minimums driven by graph content
-    final double minWFromNodes = maxX + nodeWidthGuess + headroom;
-    final double minHFromNodes = maxY + 600.0 + headroom; // rough node height + headroom
-
-    // Fallback so a blank canvas still has working area
-    const double absoluteFloor = 2048.0;
-
-    double width = minWFromViewport;
-    if (minWFromNodes > width) width = minWFromNodes;
-    if (width < absoluteFloor) width = absoluteFloor;
-
-    double height = minHFromViewport;
-    if (minHFromNodes > height) height = minHFromNodes;
-    if (height < absoluteFloor) height = absoluteFloor;
+    final double width =
+        (maxX + paddingX) > _sceneWidth ? (maxX + paddingX) : _sceneWidth;
+    final double height =
+        (maxY + paddingY) > _sceneHeight ? (maxY + paddingY) : _sceneHeight;
 
     return Size(width, height);
   }
@@ -135,7 +118,6 @@ class _CanvasSceneState extends ConsumerState<CanvasScene> {
   Widget build(BuildContext context) {
     final canvasKey = ref.watch(connectionCanvasKeyProvider);
     final dragging = ref.watch(nodeDraggingProvider);
-    final _ = ref.watch(viewportProvider); // keep viewport-driven rebuilds
 
     // Detect host size changes WITHOUT scheduling a post-frame every build.
     final child = LayoutBuilder(
@@ -147,7 +129,7 @@ class _CanvasSceneState extends ConsumerState<CanvasScene> {
           scheduleMicrotask(_onTransformChanged);
         }
 
-        // ← Dynamic scene size: grows with viewport and node extents
+        // Base scene size grows if nodes extend beyond the initial area.
         final sceneSize = _computeSceneSize();
 
         return ContextMenuHandler(

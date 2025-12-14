@@ -25,10 +25,6 @@ import '../providers/app_providers.dart'
     show 
         sidePanelVisibleProvider, 
         sidePanelWidthProvider;
-// IMPORTANT: Share the *same* asset provider instance across all per-tab
-// ProviderContainers, so mounting/unmounting from the Toolbar (root scope)
-// immediately reflects inside node widgets that live in per-tab scopes.
-import '../providers/asset_provider.dart' show assetFilesProvider;
 import '../providers/connection/connection_providers.dart'
     show 
         connectionStartPortProvider, 
@@ -49,6 +45,7 @@ import '../providers/ui/canvas_providers.dart'
 import '../providers/ui/interaction_providers.dart' show nodeDraggingProvider;
 import '../providers/ui/port_position_provider.dart'
     show 
+        PortPositionNotifier,
         portPositionProvider, 
         portPositionsEpochProvider;
 import '../providers/ui/selection_providers.dart' show selectedNodesProvider;
@@ -107,7 +104,6 @@ class _HostState extends ConsumerState<Host> {
   }
 
   ProviderContainer _createContainer(String tabId) {
-    final rootAssetsNotifier = ref.read(assetFilesProvider.notifier);
     final canvasKey = GlobalKey(); // unique per tab to avoid GlobalKey collisions
 
     final container = ProviderContainer(
@@ -118,8 +114,13 @@ class _HostState extends ConsumerState<Host> {
         graphProvider.overrideWith(
           (ref) => GraphStateByTabNotifier(_graph, tabId),
         ),
-        // Share the SAME asset notifier instance across tabs
-        assetFilesProvider.overrideWith((ref) => rootAssetsNotifier),
+        // Per-tab port positions + epoch so wires/ports never leak between tabs.
+        portPositionProvider.overrideWith(
+          (ref) => PortPositionNotifier(),
+        ),
+        portPositionsEpochProvider.overrideWith(
+          (ref) => 0,
+        ),
         // Provide a per-tab canvas key so multiple canvases don't reuse one GlobalKey.
         connectionCanvasKeyProvider.overrideWithValue(canvasKey),
       ],
@@ -193,15 +194,6 @@ class _HostState extends ConsumerState<Host> {
     // ⬇ Seed globals["assets"] once at startup (PlatformFile list for legacy nodes).
     _graph.setGlobal('assets', _platformAssetsFromHub());
 
-    // Let host apps bootstrap (e.g., rename initial tab to "main", register panels, etc.)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final hook = ref.read(hostInitHookProvider);
-      if (hook != null) {
-        hook(_graph, ref);
-      }
-    });
-
     // ⬇ Attach graph to the PageEmbedder so page API can open tabs at runtime.
     PageEmbedder.instance.attachGraph(_graph);
 
@@ -212,6 +204,22 @@ class _HostState extends ConsumerState<Host> {
     _ensureContainer(active);
     _ensureRepaint(active);
     _updateActiveContainerLink(active); // <<< bridge: expose active canvas container
+
+    // Let host apps bootstrap (e.g., rename initial tab to "main", register panels, etc.)
+    // and then normalize port positions once the initial graph + canvas are ready.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final hook = ref.read(hostInitHookProvider);
+      if (hook != null) {
+        hook(_graph, ref);
+      }
+      // After the hook potentially loads a graph into the active tab,
+      // ask all ports in that tab to re-measure so initial wires attach
+      // correctly without waiting for the first manual drag.
+      final activeId = _graph.activeBlueprintId;
+      _sanitizePortsForTab(activeId);
+      _bumpTick(activeId);
+    });
 
     _subs = [
       // ⬇ Keep GraphController.globals["assets"] in sync with panel assets.

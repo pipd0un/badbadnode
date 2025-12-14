@@ -30,6 +30,7 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 build/
 
+example/
 legacy_temp.txt
 to_legacy.py
 staged_changes.txt

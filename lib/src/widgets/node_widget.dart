@@ -22,9 +22,14 @@ class NodeWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Look up the node definition once; fall back to a generic ports-only
+    // widget if this blueprint references an unknown / unregistered type.
+    final def = NodeRegistry().lookup(node.type);
+
     if (node.type == 'sink' || node.type == 'note') {
-      // body already contains the pill from SinkNode.buildWidget
-      final body = NodeRegistry().lookup(node.type)!.buildWidget(node, ref);
+      // body already contains the pill from SinkNode / NoteNode buildWidget.
+      final body =
+          def != null ? def.buildWidget(node, ref) : GenericNodeWidget(node: node);
       return RepaintBoundary(child: body);
     }
 
@@ -37,7 +42,8 @@ class NodeWidget extends ConsumerWidget {
     );
     final graph = ref.read(graphControllerProvider);
 
-    final body = NodeRegistry().lookup(node.type)!.buildWidget(node, ref);
+    final body =
+        def != null ? def.buildWidget(node, ref) : GenericNodeWidget(node: node);
 
     return Container(
       width: 160,

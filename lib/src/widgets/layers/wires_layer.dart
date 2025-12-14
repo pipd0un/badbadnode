@@ -14,15 +14,21 @@ import '../../providers/ui/selection_providers.dart' show selectedNodesProvider;
 import '../../providers/ui/viewport_provider.dart' show viewportProvider;
 import '../node_drag_wrapper.dart' show dragDeltaNotifier;
 
-/// File-scoped cache so wires can fall back to last-known endpoints for a frame.
-/// This preserves visual continuity when ports haven't re-measured yet.
-final Map<String, Offset> _lastKnownPortCenters = <String, Offset>{};
-
-class WiresLayer extends ConsumerWidget {
+/// WiresLayer keeps a per-canvas cache of last-known port centres so that wires
+/// stay visually stable while ports re-measure. The cache is scoped to the
+/// widget instance (per tab), avoiding cross-tab leakage.
+class WiresLayer extends ConsumerStatefulWidget {
   const WiresLayer({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<WiresLayer> createState() => _WiresLayerState();
+}
+
+class _WiresLayerState extends ConsumerState<WiresLayer> {
+  final Map<String, Offset> _lastKnownPortCenters = <String, Offset>{};
+
+  @override
+  Widget build(BuildContext context) {
     final graph     = ref.watch(graphProvider);
     final positions = ref.watch(portPositionProvider);
     final selected  = ref.watch(selectedNodesProvider);
@@ -45,7 +51,7 @@ class WiresLayer extends ConsumerWidget {
         }
 
         // Build a merged map that falls back to last-known coordinates if a port
-        // hasn't reported this frame yet. This mirrors pre-0.4.1 continuity.
+        // hasn't reported this frame yet.
         final mergedPositions = Map<String, Offset>.from(_lastKnownPortCenters)
           ..addAll(positions);
 
