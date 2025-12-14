@@ -1,4 +1,3 @@
-// lib/main.dart
 import 'package:badbad/node.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -29,7 +28,7 @@ class NodeEditorApp extends ConsumerWidget {
     SnackbarService.messengerKey ??= messengerKey;
 
     return MaterialApp(
-      title: 'Mordecai',
+      title: 'badbad/node',
       scaffoldMessengerKey: messengerKey,
       theme: ThemeData(primarySwatch: Colors.blue),
       home: const NodeEditorHome(),
@@ -45,7 +44,7 @@ class NodeEditorHome extends ConsumerWidget {
     return Scaffold(
       backgroundColor: Colors.black87,
       appBar: const Toolbar(),
-      body: SceneBuilder(),
+      body: Host(),
     );
   }
 }

@@ -10,10 +10,7 @@ class ActiveCanvasContainerLink {
   ActiveCanvasContainerLink._();
   static final ActiveCanvasContainerLink instance = ActiveCanvasContainerLink._();
 
-  ProviderContainer? _container;
-
-  ProviderContainer? get container => _container;
-  set container(ProviderContainer? c) => _container = c;
+  ProviderContainer? container;
 
   /// Convenience: run [fn] with the active container if available,
   /// otherwise fall back to [fallback] (e.g. root ref.container path).
@@ -21,7 +18,7 @@ class ActiveCanvasContainerLink {
     required T Function(ProviderContainer c) fn,
     required T Function() fallback,
   }) {
-    final c = _container;
+    final c = container;
     if (c != null) return fn(c);
     return fallback();
   }

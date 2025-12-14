@@ -62,6 +62,7 @@ class ToolbarActions extends ConsumerWidget {
               raw['connections'] is! List) {
             throw const FormatException('Missing "nodes" or "connections"');
           }
+          if (!context.mounted) return;
           graph.loadJsonMap(raw.cast<String, dynamic>());
         } else {
           final data = await Clipboard.getData('text/plain');
@@ -71,6 +72,7 @@ class ToolbarActions extends ConsumerWidget {
               raw['connections'] is! List) {
             throw const FormatException('Missing "nodes" or "connections"');
           }
+          if (!context.mounted) return;
           graph.loadJsonMap(raw.cast<String, dynamic>());
         }
         messenger.currentState?.showSnackBar(
@@ -123,6 +125,7 @@ class ToolbarActions extends ConsumerWidget {
           onPressed: () async {
             try {
               await graph.evaluate();
+              if (!context.mounted) return;
               messenger.currentState?.showSnackBar(
                 const SnackBar(
                   content: Text('Evaluation finished'),
@@ -130,6 +133,7 @@ class ToolbarActions extends ConsumerWidget {
                 ),
               );
             } catch (e) {
+              if (!context.mounted) return;
               await showDialog<void>(
                 context: context,
                 builder: (ctx) => AlertDialog(

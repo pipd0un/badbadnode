@@ -37,6 +37,14 @@ dependencies:
   badbad:
     path: ../
   flutter_riverpod: ^2.6.1
+  file_picker: ^10.2.0
+  collection: ^1.19.1
+  media_kit: ^1.2.0
+  media_kit_video: ^1.3.0
+  flutter_box_transform: ^0.4.7
+  image: ^4.5.4
+  archive: ^4.0.7
+  hive_flutter: ^1.1.0
 
 dev_dependencies:
   flutter_test:
