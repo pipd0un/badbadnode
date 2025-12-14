@@ -98,13 +98,6 @@ class _TabChipState extends ConsumerState<_TabChip> {
     });
   }
 
-  Future<void> _beforeCloseHook() async {
-    final hook = ref.read(beforeCloseTabHookProvider);
-    if (hook != null) {
-      await hook(widget.id, widget.title, widget.controller);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     // Use immediate visual pressed feedback OR real active state.
@@ -235,10 +228,6 @@ class _TabChipState extends ConsumerState<_TabChip> {
                           break;
                         }
                       }
-
-                      // Let host app persist snapshot if it wants.
-                      await _beforeCloseHook();
-
                       widget.controller.closeBlueprint(widget.id);
 
                       if (wasActive && fallback != null) {

@@ -33,8 +33,6 @@ import '../providers/graph/graph_state_provider.dart'
     show 
         GraphStateByTabNotifier, 
         graphProvider;
-// decoupled host bootstrap hook (apps can override this)
-import '../providers/hooks.dart' show hostInitHookProvider;
 // bridge so Toolbar can target the *active canvas* container
 import '../providers/ui/active_canvas_provider.dart' show ActiveCanvasContainerLink;
 import '../providers/ui/canvas_providers.dart'
@@ -205,17 +203,10 @@ class _HostState extends ConsumerState<Host> {
     _ensureRepaint(active);
     _updateActiveContainerLink(active); // <<< bridge: expose active canvas container
 
-    // Let host apps bootstrap (e.g., rename initial tab to "main", register panels, etc.)
-    // and then normalize port positions once the initial graph + canvas are ready.
+    // Normalize port positions so wires attach without waiting for
+    // the first manual drag.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final hook = ref.read(hostInitHookProvider);
-      if (hook != null) {
-        hook(_graph, ref);
-      }
-      // After the hook potentially loads a graph into the active tab,
-      // ask all ports in that tab to re-measure so initial wires attach
-      // correctly without waiting for the first manual drag.
       final activeId = _graph.activeBlueprintId;
       _sanitizePortsForTab(activeId);
       _bumpTick(activeId);

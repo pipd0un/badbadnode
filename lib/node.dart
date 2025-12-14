@@ -7,6 +7,8 @@ export 'src/core/evaluator.dart' show GraphEvaluator;
 export 'src/core/controller/graph_controller.core.dart' show GraphController;
 export 'src/core/graph_events.dart';
 
+// Core immutable graph model (nodes + connections).
+export 'src/domain/graph.dart' show Graph;
 export 'src/models/node.dart' show Node;
 
 export 'src/nodes/simple_node.dart' show NodeActions, InPort, OutPort;
@@ -41,12 +43,5 @@ export 'src/page_api.dart'
         unregisterPageRenderer,
         openPageTab,
         markTabAsPage;
-
-export 'src/providers/hooks.dart'
-    show
-        BeforeCloseTabHook,
-        HostInitHook,
-        beforeCloseTabHookProvider,
-        hostInitHookProvider;
 
 export 'src/services/snackbar_service.dart' show SnackbarService;
