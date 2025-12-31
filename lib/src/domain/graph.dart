@@ -24,7 +24,11 @@ class Graph {
       other.connections.every(connections.contains);
 
   @override
-  int get hashCode => Object.hashAll(nodes.values) ^ Object.hashAll(connections);
+  int get hashCode =>
+      Object.hashAllUnordered(
+        nodes.entries.map((e) => Object.hash(e.key, e.value)),
+      ) ^
+      Object.hashAllUnordered(connections);
 
   /// Produce a shallow copy with optionally replaced fields.
   Graph copyWith({

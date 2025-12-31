@@ -24,7 +24,7 @@ mixin _ConnectionsMixin on _GraphCoreBase {
     final d = _activeDoc!;
     final prevConn = d.graph.connections.firstWhere(
       (c) => c.toPortId == toPortId,
-      orElse: () => Connection(id: '', fromPortId: '', toPortId: ''),
+      orElse: () => const Connection(id: '', fromPortId: '', toPortId: ''),
     );
     d.graph = gm.deleteConnectionForInput(d.graph, toPortId);
     if (prevConn.id.isNotEmpty) {

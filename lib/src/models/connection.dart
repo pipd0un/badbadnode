@@ -5,7 +5,7 @@ class Connection {
   final String id;
   final String fromPortId;
   final String toPortId;
-  Connection({
+  const Connection({
     required this.id,
     required this.fromPortId,
     required this.toPortId,

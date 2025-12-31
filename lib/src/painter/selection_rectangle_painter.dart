@@ -8,19 +8,19 @@ class SelectionRectPainter extends CustomPainter {
   final Offset selCurrent;
   SelectionRectPainter({required this.selStart, required this.selCurrent});
 
+  static final Paint _fillPaint = Paint()
+    ..color = const Color.fromARGB(94, 33, 149, 243)
+    ..style = PaintingStyle.fill;
+  static final Paint _borderPaint = Paint()
+    ..color = Colors.blue
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color.fromARGB(94, 33, 149, 243)
-      ..style = PaintingStyle.fill;
     final rect = Rect.fromPoints(selStart, selCurrent);
-    canvas.drawRect(rect, paint);
-
-    final border = Paint()
-      ..color = Colors.blue
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    canvas.drawRect(rect, border);
+    canvas.drawRect(rect, _fillPaint);
+    canvas.drawRect(rect, _borderPaint);
   }
 
   @override

@@ -48,7 +48,8 @@ class GraphEvaluator {
     _fwd = {};
     _rev = {};
     for (final c in graph.connections) {
-      if (c.toPortId.contains('_in_process') || c.toPortId.contains('_in_action')) {
+      if (c.toPortId.endsWith('_in_process') ||
+          c.toPortId.endsWith('_in_action')) {
         continue;
       }
       final f = _nodeIdOfPort(c.fromPortId);
@@ -60,8 +61,11 @@ class GraphEvaluator {
 
   // ───────── helpers ─────────
   String _nodeIdOfPort(String pid) {
-    final parts = pid.split('_');
-    return parts.sublist(0, parts.length - 2).join('_');
+    final last = pid.lastIndexOf('_');
+    if (last <= 0) return '';
+    final secondLast = pid.lastIndexOf('_', last - 1);
+    if (secondLast <= 0) return '';
+    return pid.substring(0, secondLast);
   }
 
   /// Public helper – nodes & plugins call this.
@@ -89,10 +93,12 @@ class GraphEvaluator {
     final inDeg = <String, int>{ for (final id in ids) id: (_rev![id]?.length ?? 0) };
     final q = Queue<String>()..addAll(ids.where((id) => inDeg[id] == 0));
     final orderedIds = <String>[];
+    final seen = <String>{};
 
     while (q.isNotEmpty) {
       final u = q.removeFirst();
       orderedIds.add(u);
+      seen.add(u);
       for (final v in _fwd![u] ?? const <String>[]) {
         final nv = inDeg[v]! - 1; // read
         inDeg[v] = nv;            // write back
@@ -103,7 +109,7 @@ class GraphEvaluator {
     // In case of cycles, append remaining nodes to keep stable behavior.
     if (orderedIds.length < ids.length) {
       for (final id in ids) {
-        if (!orderedIds.contains(id)) orderedIds.add(id);
+        if (seen.add(id)) orderedIds.add(id);
       }
     }
 
@@ -330,11 +336,11 @@ class GraphEvaluator {
     final pid = '${node.id}_in_$pin';
     final conn = graph.connections.firstWhere(
       (c) => c.toPortId == pid,
-      orElse: () => Connection(id: '', fromPortId: '', toPortId: ''),
+      orElse: () => const Connection(id: '', fromPortId: '', toPortId: ''),
     );
     if (conn.id.isEmpty) return null;
     final srcId  = _nodeIdOfPort(conn.fromPortId);
-    final srcPin = conn.fromPortId.split('_').last;
+    final srcPin = conn.fromPortId.substring(conn.fromPortId.lastIndexOf('_') + 1);
     return srcPin == 'item' ? _values['${srcId}_item'] : _values[srcId];
   }
 }

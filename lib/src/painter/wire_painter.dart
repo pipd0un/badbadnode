@@ -12,20 +12,22 @@ class WirePainter extends CustomPainter {
   final Set<String> sel;
 
   static final _staticCache = <String, CachedPath>{};
+  static final Paint _wirePaint = Paint()
+    ..color = const Color.fromARGB(255, 255, 112, 226)
+    ..strokeWidth = 3
+    ..style = PaintingStyle.stroke;
 
   WirePainter(this.cons, this.ports, this.dragOffset, this.sel);
 
   @override
   void paint(Canvas canvas, Size size) {
     String nodeIdOf(String portId) {
-      final p = portId.split('_');
-      return p.sublist(0, p.length - 2).join('_');
+      final last = portId.lastIndexOf('_');
+      if (last <= 0) return '';
+      final secondLast = portId.lastIndexOf('_', last - 1);
+      if (secondLast <= 0) return '';
+      return portId.substring(0, secondLast);
     }
-
-    final paint = Paint()
-      ..color = const Color.fromARGB(255, 255, 112, 226)
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke;
 
     for (final c in cons) {
       final a0 = ports[c.fromPortId];
@@ -48,13 +50,13 @@ class WirePainter extends CustomPainter {
             ..cubicTo(a.dx, midY, b.dx, midY, b.dx, b.dy);
           _staticCache[key] = CachedPath(path, a, b);
         }
-        canvas.drawPath(_staticCache[key]!.path, paint);
+        canvas.drawPath(_staticCache[key]!.path, _wirePaint);
       } else {
         final midY = (a.dy + b.dy) / 2;
         final path = Path()
           ..moveTo(a.dx, a.dy)
           ..cubicTo(a.dx, midY, b.dx, midY, b.dx, b.dy);
-        canvas.drawPath(path, paint);
+        canvas.drawPath(path, _wirePaint);
       }
     }
   }
@@ -64,5 +66,5 @@ class WirePainter extends CustomPainter {
       old.ports       != ports       ||
       old.dragOffset  != dragOffset  ||
       old.sel         != sel         ||
-      old.cons.length != cons.length;
+      old.cons        != cons;
 }

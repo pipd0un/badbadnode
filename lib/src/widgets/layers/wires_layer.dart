@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/connection.dart' show Connection;
 import '../../painter/wire_painter.dart';
 import '../../providers/graph/graph_state_provider.dart' show graphProvider;
 import '../../providers/ui/port_position_provider.dart' show portPositionProvider;
@@ -46,8 +47,11 @@ class _WiresLayerState extends ConsumerState<WiresLayer> {
         final screenRect = vp == Rect.zero ? vp : vp.inflate(600.0);
 
         String nodeIdOf(String portId) {
-          final p = portId.split('_');
-          return p.sublist(0, p.length - 2).join('_');
+          final last = portId.lastIndexOf('_');
+          if (last <= 0) return '';
+          final secondLast = portId.lastIndexOf('_', last - 1);
+          if (secondLast <= 0) return '';
+          return portId.substring(0, secondLast);
         }
 
         // Build a merged map that falls back to last-known coordinates if a port
@@ -75,14 +79,19 @@ class _WiresLayerState extends ConsumerState<WiresLayer> {
         }
 
         // Keep viewport culling, but evaluate with merged (fallback) positions.
-        final visibleCons = (vp == Rect.zero)
-            ? graph.connections
-            : [
-                for (final c in graph.connections)
-                  if (endpoint(c.fromPortId) != null && endpoint(c.toPortId) != null)
-                    if (intersects(endpoint(c.fromPortId)!, endpoint(c.toPortId)!, screenRect))
-                      c
-              ];
+        final List<Connection> visibleCons;
+        if (vp == Rect.zero) {
+          visibleCons = graph.connections;
+        } else {
+          final list = <Connection>[];
+          for (final c in graph.connections) {
+            final a = endpoint(c.fromPortId);
+            final b = endpoint(c.toPortId);
+            if (a == null || b == null) continue;
+            if (intersects(a, b, screenRect)) list.add(c);
+          }
+          visibleCons = list;
+        }
 
         // Use merged positions so WirePainter gets fallback coords.
         final painter = WirePainter(visibleCons, mergedPositions, delta, selected);

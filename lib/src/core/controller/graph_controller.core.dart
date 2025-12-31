@@ -80,12 +80,22 @@ abstract class _GraphCoreBase {
   Stream<T> on<T>() => _hub.on<T>();
 
   // ───────────────── id/helpers ─────────────────
-  String _id() =>
-      '${DateTime.now().microsecondsSinceEpoch}${Random().nextInt(1000)}';
+  static final Random _rng = Random();
+  static int _seq = 0;
+
+  String _id() {
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final seq = (_seq = (_seq + 1) & 0xFFFFF);
+    final rand = _rng.nextInt(1 << 32);
+    return '${now.toRadixString(36)}_${seq.toRadixString(36)}_${rand.toRadixString(36)}';
+  }
 
   String _nodeIdFromPort(String pid) {
-    final parts = pid.split('_');
-    return parts.sublist(0, parts.length - 2).join('_');
+    final last = pid.lastIndexOf('_');
+    if (last <= 0) return '';
+    final secondLast = pid.lastIndexOf('_', last - 1);
+    if (secondLast <= 0) return '';
+    return pid.substring(0, secondLast);
   }
 
   // ───────────────── active graph shortcuts ─────────────────

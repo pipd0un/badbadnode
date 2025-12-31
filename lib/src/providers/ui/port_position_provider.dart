@@ -66,8 +66,11 @@ class PortPositionNotifier extends StateNotifier<Map<String, Offset>> {
   void pruneByNodeIds(Set<String> nodeIds) {
     if (state.isEmpty) return;
     String nodeIdOf(String portId) {
-      final parts = portId.split('_');
-      return parts.sublist(0, parts.length - 2).join('_');
+      final last = portId.lastIndexOf('_');
+      if (last <= 0) return '';
+      final secondLast = portId.lastIndexOf('_', last - 1);
+      if (secondLast <= 0) return '';
+      return portId.substring(0, secondLast);
     }
 
     final next = <String, Offset>{};

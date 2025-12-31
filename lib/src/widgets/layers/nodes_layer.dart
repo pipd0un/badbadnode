@@ -18,8 +18,7 @@ class NodesLayer extends ConsumerWidget {
         .watch(graphProvider)
         .nodes
         .values
-        .toList()
-      ..sort((a, b) => a.id.compareTo(b.id)); // stable order
+        .toList(growable: false); // stable insertion order (LinkedHashMap)
 
     final stack = Stack(
       children: [

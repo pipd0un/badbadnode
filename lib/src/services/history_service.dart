@@ -54,13 +54,12 @@ class GraphHistoryService {
   }
 
   // ───────── helper deep-copies ─────────
-  Map<String, Node> _copyNodes(Map<String, Node> src) => {
-        for (final e in src.entries)
-          e.key: Node(id: e.value.id, type: e.value.type, data: Map.of(e.value.data))
-      };
+  // NOTE: Nodes/Connections are treated as immutable. This enables structural
+  // sharing between snapshots (fast + low-GC) while keeping graph mutations
+  // purely functional (they create new Node/Connection objects as needed).
+  Map<String, Node> _copyNodes(Map<String, Node> src) =>
+      Map<String, Node>.unmodifiable(src);
 
-  List<Connection> _copyConns(List<Connection> src) => [
-        for (final c in src)
-          Connection(id: c.id, fromPortId: c.fromPortId, toPortId: c.toPortId)
-      ];
+  List<Connection> _copyConns(List<Connection> src) =>
+      List<Connection>.unmodifiable(src);
 }
