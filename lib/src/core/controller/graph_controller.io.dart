@@ -25,7 +25,11 @@ mixin _IOMixin on _GraphCoreBase {
 
   void loadJsonMap(Map<String, dynamic> json) {
     if (!_hasActiveDoc) return;
-    _snapshot();
+    if (_isBatching) {
+      _markBatchDirty();
+    } else {
+      _snapshot();
+    }
     resetGlobals(); // ensure fresh globals for new graph
     // Rebuild nodes and connections from JSON
     final Map<String, Node> nodes = {};
@@ -43,19 +47,11 @@ mixin _IOMixin on _GraphCoreBase {
         )
         .toList();
     final d = _activeDoc!;
-    d.graph = Graph(nodes: nodes, connections: connections);
-    d._rebuildConnectionIndex();
+    d._setFromGraph(Graph(nodes: nodes, connections: connections));
     // Emit events for full reload
     _hub.fire(GraphCleared());
     _hub.fire(TabGraphCleared(_activeId!));
-    for (final n in nodes.values) {
-      _hub.fire(NodeAdded(n.id));
-    }
-    for (final c in connections) {
-      _hub.fire(ConnectionAdded(c.fromPortId, c.toPortId));
-    }
-    _hub.fire(GraphChanged(d.graph));
-    _hub.fire(TabGraphChanged(_activeId!, d.graph));
+    _emitGraphChanged(d);
   }
 
   Future<void> loadJsonFromFile() async {
@@ -115,8 +111,7 @@ mixin _IOMixin on _GraphCoreBase {
           ),
         )
         .toList();
-    d.graph = Graph(nodes: nodes, connections: connections);
-    d._rebuildConnectionIndex();
+    d._setFromGraph(Graph(nodes: nodes, connections: connections));
 
     // Notify the tab-specific listeners.
     _hub.fire(TabGraphCleared(id));
@@ -134,13 +129,15 @@ mixin _IOMixin on _GraphCoreBase {
   void clear() {
     if (!_hasActiveDoc) return;
     resetGlobals();
-    _snapshot();
+    if (_isBatching) {
+      _markBatchDirty();
+    } else {
+      _snapshot();
+    }
     final d = _activeDoc!;
-    d.graph = gm.clear(d.graph);
-    d._rebuildConnectionIndex();
+    d._setFromGraph(Graph.empty());
     _hub.fire(GraphCleared());
     _hub.fire(TabGraphCleared(_activeId!));
-    _hub.fire(GraphChanged(d.graph));
-    _hub.fire(TabGraphChanged(_activeId!, d.graph));
+    _emitGraphChanged(d);
   }
 }

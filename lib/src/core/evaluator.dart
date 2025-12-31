@@ -46,7 +46,7 @@ class GraphEvaluator {
     if (_fwd != null) return;
     _fwd = {};
     _rev = {};
-    for (final c in graph.connections) {
+    for (final c in graph.connectionValues) {
       if (c.toPortId.endsWith('_in_process') ||
           c.toPortId.endsWith('_in_action')) {
         continue;
@@ -124,7 +124,7 @@ class GraphEvaluator {
     final needed = <String>{};
     void addUpstream(String id) {
       if (!needed.add(id)) return;
-      for (final c in graph.connections.where(
+      for (final c in graph.connectionValues.where(
           (c) => _nodeIdOfPort(c.toPortId) == id)) {
         final upId = _nodeIdOfPort(c.fromPortId);
         if (_def(graph.nodes[upId]!.type).isCommand) continue; // skip side-effects
@@ -262,7 +262,7 @@ class GraphEvaluator {
   final list = input(loop, 'in') as List<dynamic>? ?? [];
 
   // sinks once
-  final sinks = graph.connections
+  final sinks = graph.connectionValues
       .where((c) => c.toPortId == '${loop.id}_in_process')
       .map((c) => _nodeIdOfPort(c.fromPortId))
       .where((id) => neededFilter == null || neededFilter.contains(id))
@@ -272,10 +272,10 @@ class GraphEvaluator {
   final body = <String>{};
   void expand(String id) {
     if (!body.add(id) || id == loop.id) return;
-    for (final up in graph.connections.where((c) => _nodeIdOfPort(c.toPortId) == id)) {
+    for (final up in graph.connectionValues.where((c) => _nodeIdOfPort(c.toPortId) == id)) {
       expand(_nodeIdOfPort(up.fromPortId));
     }
-    for (final dn in graph.connections.where((c) => _nodeIdOfPort(c.fromPortId) == id)) {
+    for (final dn in graph.connectionValues.where((c) => _nodeIdOfPort(c.fromPortId) == id)) {
       expand(_nodeIdOfPort(dn.toPortId));
     }
   }
@@ -322,7 +322,7 @@ class GraphEvaluator {
 
   /*──────────────── reachability check ─────────────────────*/
   bool _reachable(Node n, {Set<String>? neededFilter}) {
-    return graph.connections.any((c) {
+    return graph.connectionValues.any((c) {
       if (_nodeIdOfPort(c.toPortId) != n.id) return false;
       final src = _nodeIdOfPort(c.fromPortId);
       return (neededFilter == null || neededFilter.contains(src)) &&

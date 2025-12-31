@@ -42,24 +42,91 @@ class _Doc {
   final Map<String, dynamic> globals;
   bool globalsBootstrapped;
   String title;
+  final Map<String, Node> nodesMut = <String, Node>{};
+  final Map<String, Connection> connsById = <String, Connection>{};
+
   final Map<String, Connection> connByToPortId = <String, Connection>{};
   final Map<String, Connection> connById = <String, Connection>{};
+  final Map<String, Set<String>> connIdsByNodeId = <String, Set<String>>{};
+  int batchDepth = 0;
+  bool batchDirty = false;
+  bool batchSnapshotted = false;
 
   _Doc({required this.graph, required this.title})
       : history = GraphHistoryService(),
         globals = <String, dynamic>{},
         globalsBootstrapped = false {
-    history.init(graph.nodes, graph.connections);
-    _rebuildConnectionIndex();
+    history.init(
+      Map<String, Node>.unmodifiable(Map.of(graph.nodes)),
+      List<Connection>.unmodifiable(graph.connections.toList(growable: false)),
+    );
+    _rebuildConnectionIndexFrom(graph.connections);
   }
 
-  void _rebuildConnectionIndex() {
+  void _setFromGraph(Graph g) {
+    graph = g;
+    _rebuildConnectionIndexFrom(g.connections);
+  }
+
+  void _stageFromGraph() {
+    nodesMut
+      ..clear()
+      ..addAll(graph.nodes);
+    connsById
+      ..clear();
+    for (final c in graph.connections) {
+      connsById[c.id] = c;
+    }
+    _rebuildConnectionIndexFrom(connsById.values);
+  }
+
+  void _materializeGraphFromStage() {
+    graph = Graph(
+      nodes: Map<String, Node>.unmodifiable(Map.of(nodesMut)),
+      connections: List<Connection>.unmodifiable(
+        connsById.values.toList(growable: false),
+      ),
+    );
+    _rebuildConnectionIndexFrom(graph.connections);
+  }
+
+  void _rebuildConnectionIndexFrom(Iterable<Connection> connections) {
     connByToPortId.clear();
     connById.clear();
-    for (final c in graph.connections) {
-      connByToPortId[c.toPortId] = c;
-      connById[c.id] = c;
+    connIdsByNodeId.clear();
+    for (final c in connections) {
+      _indexAddConnection(c);
     }
+  }
+
+  void _indexAddConnection(Connection c) {
+    connByToPortId[c.toPortId] = c;
+    connById[c.id] = c;
+    final fromNodeId = _nodeIdOfPort(c.fromPortId);
+    final toNodeId = _nodeIdOfPort(c.toPortId);
+    (connIdsByNodeId[fromNodeId] ??= <String>{}).add(c.id);
+    (connIdsByNodeId[toNodeId] ??= <String>{}).add(c.id);
+  }
+
+  void _indexRemoveConnection(Connection c) {
+    connByToPortId.remove(c.toPortId);
+    connById.remove(c.id);
+    final fromNodeId = _nodeIdOfPort(c.fromPortId);
+    final toNodeId = _nodeIdOfPort(c.toPortId);
+    final fromSet = connIdsByNodeId[fromNodeId];
+    fromSet?.remove(c.id);
+    if (fromSet != null && fromSet.isEmpty) connIdsByNodeId.remove(fromNodeId);
+    final toSet = connIdsByNodeId[toNodeId];
+    toSet?.remove(c.id);
+    if (toSet != null && toSet.isEmpty) connIdsByNodeId.remove(toNodeId);
+  }
+
+  static String _nodeIdOfPort(String portId) {
+    final last = portId.lastIndexOf('_');
+    if (last <= 0) return '';
+    final secondLast = portId.lastIndexOf('_', last - 1);
+    if (secondLast <= 0) return '';
+    return portId.substring(0, secondLast);
   }
 }
 
@@ -112,22 +179,93 @@ abstract class _GraphCoreBase {
 
   // ───────────────── active graph shortcuts ─────────────────
   Graph get graph => _activeDoc?.graph ?? Graph.empty();
-  Map<String, Node> get nodes => _activeDoc?.graph.nodes ?? const <String, Node>{};
+  Map<String, Node> get nodes =>
+      _activeDoc == null
+          ? const <String, Node>{}
+          : (_isBatching ? _activeDoc!.nodesMut : _activeDoc!.graph.nodes);
+  Iterable<Connection> get connectionValues =>
+      _activeDoc == null
+          ? const <Connection>[]
+          : (_isBatching
+              ? _activeDoc!.connsById.values
+              : _activeDoc!.graph.connections);
   List<Connection> get connections =>
-      _activeDoc?.graph.connections ?? const <Connection>[];
+      _activeDoc == null
+          ? const <Connection>[]
+          : (_isBatching
+              ? _activeDoc!.connsById.values.toList(growable: false)
+              : _activeDoc!.graph.connections);
 
   // ───────────────── history helpers (used across mixins) ─────────────────
+  bool get _isBatching => _activeDoc?.batchDepth != null && _activeDoc!.batchDepth > 0;
+
+  void beginBatch() {
+    final d = _activeDoc;
+    if (d == null) return;
+    if (d.batchDepth == 0) {
+      d._stageFromGraph();
+    }
+    d.batchDepth++;
+  }
+
+  void endBatch() {
+    final d = _activeDoc;
+    if (d == null) return;
+    if (d.batchDepth == 0) return;
+    d.batchDepth--;
+    if (d.batchDepth != 0) return;
+
+    if (d.batchDirty) {
+      d._materializeGraphFromStage();
+      _hub.fire(GraphChanged(d.graph));
+      _hub.fire(TabGraphChanged(_activeId!, d.graph));
+    }
+    d.batchDirty = false;
+    d.batchSnapshotted = false;
+  }
+
+  T runBatch<T>(T Function() fn) {
+    beginBatch();
+    try {
+      return fn();
+    } finally {
+      endBatch();
+    }
+  }
+
+  void _markBatchDirty() {
+    final d = _activeDoc;
+    if (d == null) return;
+    if (!_isBatching) return;
+    d.batchDirty = true;
+    if (!d.batchSnapshotted) {
+      d.batchSnapshotted = true;
+      _snapshot();
+    }
+  }
+
+  void _emitGraphChanged(_Doc d) {
+    if (_isBatching) {
+      _markBatchDirty();
+      return;
+    }
+    _hub.fire(GraphChanged(d.graph));
+    _hub.fire(TabGraphChanged(_activeId!, d.graph));
+  }
+
   void _snapshot() {
     final d = _activeDoc;
     if (d == null) return;
-    d.history.push(d.graph.nodes, d.graph.connections);
+    d.history.push(
+      d.graph.nodes,
+      d.graph.connections,
+    );
   }
 
   void _restoreSnapshot(GraphSnapshot snap) {
     final d = _activeDoc;
     if (d == null) return;
-    d.graph = Graph(nodes: snap.nodes, connections: snap.connections);
-    d._rebuildConnectionIndex();
+    d._setFromGraph(Graph(nodes: snap.nodes, connections: snap.connections));
     _hub.fire(GraphCleared());
     _hub.fire(TabGraphCleared(_activeId!));
     _hub.fire(GraphChanged(d.graph));

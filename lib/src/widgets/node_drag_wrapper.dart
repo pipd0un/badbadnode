@@ -95,10 +95,12 @@ class _NodeDragWrapperState extends ConsumerState<NodeDragWrapper> {
     final dx    = dragDeltaNotifier.value.dx;
     final dy    = dragDeltaNotifier.value.dy;
 
-    for (final id in sel) {
-      graph.moveNode(id, dx, dy);
-      graph.snapNodeToGrid(id);
-    }
+    graph.runBatch<void>(() {
+      for (final id in sel) {
+        graph.moveNode(id, dx, dy);
+        graph.snapNodeToGrid(id);
+      }
+    });
 
     dragDeltaNotifier.value = Offset.zero;
     _isLeader = false;

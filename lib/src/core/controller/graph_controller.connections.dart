@@ -10,36 +10,54 @@ mixin _ConnectionsMixin on _GraphCoreBase {
 
   void addConnection(String from, String to) {
     if (!_hasActiveDoc) return;
-    _snapshot();
+    if (_isBatching) {
+      _markBatchDirty();
+    } else {
+      _snapshot();
+    }
     // Only one connection per input – remove existing
     final d = _activeDoc!;
-    final prev = d.connByToPortId[to];
-    if (prev != null) {
-      d.graph = gm.deleteConnectionForInput(d.graph, to);
-      d.connByToPortId.remove(to);
-      d.connById.remove(prev.id);
-    }
     final conn = Connection(id: _id(), fromPortId: from, toPortId: to);
-    d.graph = gm.addConnection(d.graph, conn);
-    d.connByToPortId[to] = conn;
-    d.connById[conn.id] = conn;
+    if (_isBatching) {
+      final prev = d.connByToPortId[to];
+      if (prev != null) {
+        d._indexRemoveConnection(prev);
+        d.connsById.remove(prev.id);
+      }
+      d.connsById[conn.id] = conn;
+      d._indexAddConnection(conn);
+    } else {
+      final prev = d.connByToPortId[to];
+      if (prev != null) {
+        d.graph = gm.deleteConnection(d.graph, prev.id);
+        d._indexRemoveConnection(prev);
+      }
+      d.graph = gm.addConnection(d.graph, conn);
+      d._indexAddConnection(conn);
+    }
     _hub.fire(ConnectionAdded(from, to));
-    _hub.fire(GraphChanged(d.graph));
-    _hub.fire(TabGraphChanged(_activeId!, d.graph));
+    _emitGraphChanged(d);
   }
 
   void deleteConnectionForInput(String toPortId) {
     if (!_hasActiveDoc) return;
-    _snapshot();
+    if (_isBatching) {
+      _markBatchDirty();
+    } else {
+      _snapshot();
+    }
     final d = _activeDoc!;
     final prevConn = d.connByToPortId[toPortId];
     if (prevConn == null) return;
-    d.graph = gm.deleteConnectionForInput(d.graph, toPortId);
-    d.connByToPortId.remove(toPortId);
-    d.connById.remove(prevConn.id);
+    if (_isBatching) {
+      d._indexRemoveConnection(prevConn);
+      d.connsById.remove(prevConn.id);
+    } else {
+      d.graph = gm.deleteConnection(d.graph, prevConn.id);
+      d._indexRemoveConnection(prevConn);
+    }
     _hub.fire(ConnectionDeleted(prevConn.id));
-    _hub.fire(GraphChanged(d.graph));
-    _hub.fire(TabGraphChanged(_activeId!, d.graph));
+    _emitGraphChanged(d);
   }
 
   bool hasConnectionTo(String toPortId) =>
