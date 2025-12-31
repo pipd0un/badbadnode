@@ -18,6 +18,7 @@ Runs smoothly in the browser and supports full user interaction with real-time e
 - 🧠 **Built-in nodes**: Numbers, Strings, Lists, Operators, Control Flow.
 - 🧩 **Custom UI**: Each node can define its own widget layout.
 - 🎨 **Virtualized canvas**: Fast performance with hundreds of nodes.
+- 🗺️ **Auto-expanding scene**: Canvas grows as you pan/drag beyond the initial area.
 - 🧱 **Undo/Redo**: Built-in time-travel graph state.
 - 🌐 **Flutter Web**: 100% client-side. No backend required.
 

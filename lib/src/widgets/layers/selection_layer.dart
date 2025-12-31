@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../painter/selection_rectangle_painter.dart' show SelectionRectPainter;
-import '../../providers/graph/graph_controller_provider.dart' show graphControllerProvider;
+import '../../providers/graph/graph_state_provider.dart' show graphProvider;
 import '../../providers/ui/selection_providers.dart' show selectedNodesProvider;
 import '../../providers/ui/selection_rectangle_provider.dart' show selectionRectCurrentProvider, selectionRectStartProvider;
 
@@ -22,7 +22,7 @@ class SelectionLayer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final selStart   = ref.watch(selectionRectStartProvider);
     final selCurrent = ref.watch(selectionRectCurrentProvider);
-    final graph      = ref.read(graphControllerProvider);
+    final graph      = ref.read(graphProvider);
 
     void compute() {
       final s = ref.read(selectionRectStartProvider);

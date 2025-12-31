@@ -16,6 +16,11 @@ class _CanvasSceneState extends ConsumerState<CanvasScene> {
   // Fixed logical canvas size; large enough for typical blueprints.
   static const double _sceneWidth = 5000.0;
   static const double _sceneHeight = 10000.0;
+  static const double _sceneGrowPaddingX = 1000.0;
+  static const double _sceneGrowPaddingY = 1000.0;
+  static const double _sceneGrowSnap = 1000.0;
+  static const double _estimatedNodeWidth = 160.0;
+  static const double _estimatedNodeHeight = 80.0;
 
   final TransformationController _tc = TransformationController();
 
@@ -33,6 +38,7 @@ class _CanvasSceneState extends ConsumerState<CanvasScene> {
   @override
   void dispose() {
     _tc.removeListener(_onTransformChanged);
+    _tc.dispose();
     super.dispose();
   }
 
@@ -56,6 +62,11 @@ class _CanvasSceneState extends ConsumerState<CanvasScene> {
     }
   }
 
+  double _snapUp(double value, double step) {
+    if (step <= 0) return value;
+    return (value / step).ceil() * step;
+  }
+
   void _onTransformChanged() {
     final box = context.findRenderObject() as RenderBox?;
     if (box == null) return;
@@ -66,7 +77,8 @@ class _CanvasSceneState extends ConsumerState<CanvasScene> {
     final tl = MatrixUtils.transformPoint(inv, Offset.zero);
     final br =
         MatrixUtils.transformPoint(inv, Offset(screen.width, screen.height));
-    _publishViewportIfChanged(Rect.fromPoints(tl, br));
+    final viewport = Rect.fromPoints(tl, br);
+    _publishViewportIfChanged(viewport);
 
     // Scale (publish only on real change)
     final scale = _extractScale(_tc.value);
@@ -88,12 +100,44 @@ class _CanvasSceneState extends ConsumerState<CanvasScene> {
         box.globalToLocal(globalPos);
   }
 
+  Size _sceneSizeFromLiveDrag({
+    required Graph graph,
+    required Set<String> selected,
+    required Offset delta,
+  }) {
+    if (selected.isEmpty) return const Size(0, 0);
+    if (delta == Offset.zero) return const Size(0, 0);
+
+    double maxX = 0.0;
+    double maxY = 0.0;
+
+    for (final id in selected) {
+      final n = graph.nodes[id];
+      if (n == null) continue;
+      final x0 = (n.data['x'] as num?)?.toDouble() ?? 0.0;
+      final y0 = (n.data['y'] as num?)?.toDouble() ?? 0.0;
+      final x = x0 + delta.dx;
+      final y = y0 + delta.dy;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+
+    // Expand to include the dragged node's footprint, not just its origin.
+    final neededWidthRaw = maxX + _estimatedNodeWidth + _sceneGrowPaddingX;
+    final neededHeightRaw = maxY + _estimatedNodeHeight + _sceneGrowPaddingY;
+
+    final neededWidth =
+        neededWidthRaw < _sceneWidth ? _sceneWidth : neededWidthRaw;
+    final neededHeight =
+        neededHeightRaw < _sceneHeight ? _sceneHeight : neededHeightRaw;
+
+    return Size(_snapUp(neededWidth, _sceneGrowSnap), _snapUp(neededHeight, _sceneGrowSnap));
+  }
+
   /// Compute a canvas size that grows to fit the furthest node, but never
   /// shrinks below the fixed base size. This runs only on occasional rebuilds
   /// (drag start/end, host resize), so it doesn't affect pan smoothness.
-  Size _computeSceneSize() {
-    final graph = ref.read(graphProvider);
-
+  Size _computeSceneSize(Graph graph) {
     double maxX = 0.0, maxY = 0.0;
     for (final n in graph.nodes.values) {
       final x = (n.data['x'] as num?)?.toDouble() ?? 0.0;
@@ -116,69 +160,117 @@ class _CanvasSceneState extends ConsumerState<CanvasScene> {
 
   @override
   Widget build(BuildContext context) {
-    final canvasKey = ref.watch(connectionCanvasKeyProvider);
-    final dragging = ref.watch(nodeDraggingProvider);
-
     // Detect host size changes WITHOUT scheduling a post-frame every build.
-    final child = LayoutBuilder(
-      builder: (context, constraints) {
-        final host = constraints.biggest;
-        if (host.isFinite && !host.isEmpty && host != _lastHostSize) {
-          _lastHostSize = host;
-          // trigger a single recompute after layout settles
-          scheduleMicrotask(_onTransformChanged);
-        }
+    final Widget child = Consumer(
+      builder: (context, ref, _) {
+        final canvasKey = ref.watch(connectionCanvasKeyProvider);
+        final dragging = ref.watch(nodeDraggingProvider);
+        final graph = ref.watch(graphProvider);
+        final selected = ref.watch(selectedNodesProvider);
+        final viewport = ref.watch(viewportProvider);
 
-        // Base scene size grows if nodes extend beyond the initial area.
-        final sceneSize = _computeSceneSize();
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final host = constraints.biggest;
+            if (host.isFinite && !host.isEmpty && host != _lastHostSize) {
+              _lastHostSize = host;
+              // trigger a single recompute after layout settles
+              scheduleMicrotask(_onTransformChanged);
+            }
 
-        return ContextMenuHandler(
-          canvasKey: canvasKey,
-          child: Listener(
-            onPointerHover: (e) => _updateDragPosIfNeeded(e.position),
-            onPointerMove: (e) => _updateDragPosIfNeeded(e.position),
-            onPointerUp: (_) =>
-                ref.read(connectionDragPosProvider.notifier).state = null,
-            child: ViewerLayer(
-              transformationController: _tc,
-              panEnabled: !dragging,
-              scaleEnabled: !dragging,
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: () {
-                  ref.read(selectedNodesProvider.notifier).clear();
-                  ref.read(connectionStartPortProvider.notifier).state = null;
-                  ref.read(connectionDragPosProvider.notifier).state = null;
-                },
-                child: SelectionLayer(
-                  canvasKey: canvasKey,
-                  child: SizedBox(
-                    key: canvasKey,
-                    width: sceneSize.width,
-                    height: sceneSize.height,
-                    child: Stack(
-                      children: [
-                        // 1) Paint grid (cached per-tab)
-                        Positioned.fill(
-                          child: RepaintBoundary(
-                            child: _GridPaintProxy(
-                              tabId: widget.tabId,
+            final sizeFromGraph = _computeSceneSize(graph);
+
+            final sizeFromViewport = viewport.isEmpty
+                ? const Size(_sceneWidth, _sceneHeight)
+                : Size(
+                    _snapUp(
+                      (viewport.right + _sceneGrowPaddingX) < _sceneWidth
+                          ? _sceneWidth
+                          : (viewport.right + _sceneGrowPaddingX),
+                      _sceneGrowSnap,
+                    ),
+                    _snapUp(
+                      (viewport.bottom + _sceneGrowPaddingY) < _sceneHeight
+                          ? _sceneHeight
+                          : (viewport.bottom + _sceneGrowPaddingY),
+                      _sceneGrowSnap,
+                    ),
+                  );
+
+            return ContextMenuHandler(
+              canvasKey: canvasKey,
+              child: Listener(
+                onPointerHover: (e) => _updateDragPosIfNeeded(e.position), 
+                onPointerMove: (e) => _updateDragPosIfNeeded(e.position),
+                onPointerUp: (_) =>
+                    ref.read(connectionDragPosProvider.notifier).state = null,
+                child: ViewerLayer(
+                  transformationController: _tc,
+                  panEnabled: !dragging,
+                  scaleEnabled: !dragging,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: () {
+                      ref.read(selectedNodesProvider.notifier).clear();
+                      ref.read(connectionStartPortProvider.notifier).state =
+                          null;
+                      ref.read(connectionDragPosProvider.notifier).state = null;
+                    },
+                    child: SelectionLayer(
+                      canvasKey: canvasKey,
+                      child: ValueListenableBuilder<Offset>(
+                        valueListenable: dragDeltaNotifier,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Positioned.fill(
+                              child: RepaintBoundary(
+                                child: _GridPaintProxy(tabId: widget.tabId),
+                              ),
                             ),
-                          ),
+                            VirtualizedCanvas(
+                              canvasKey: canvasKey,
+                              controller: _tc,
+                            ),
+                            const PreviewLayer(),
+                          ],
                         ),
-                        // 2) The rest
-                        VirtualizedCanvas(
-                          canvasKey: canvasKey,
-                          controller: _tc,
-                        ),
-                        const PreviewLayer(),
-                      ],
+                        builder: (context, delta, child) {
+                          final liveDragSize = dragging
+                              ? _sceneSizeFromLiveDrag(
+                                  graph: graph,
+                                  selected: selected,
+                                  delta: delta,
+                                )
+                              : const Size(0, 0);
+
+                          final sceneSize = Size(
+                            [
+                              sizeFromGraph.width,
+                              sizeFromViewport.width,
+                              liveDragSize.width,
+                            ].reduce((a, b) => a > b ? a : b),
+                            [
+                              sizeFromGraph.height,
+                              sizeFromViewport.height,
+                              liveDragSize.height,
+                            ].reduce((a, b) => a > b ? a : b),
+                          );
+
+                          return SizedBox(
+                            key: canvasKey,
+                            width: sceneSize.width,
+                            height: sceneSize.height,
+                            child: child,
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );

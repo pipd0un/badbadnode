@@ -20,6 +20,7 @@ export 'src/widgets/toolbar.dart' show Toolbar;
 
 export 'src/providers/app_providers.dart';
 export 'src/providers/asset_provider.dart' show assetFilesProvider;
+export 'src/providers/graph/graph_controller_provider.dart' show graphControllerProvider;
 export 'src/providers/panel_provider.dart' show panelAppsProvider, activePanelIdProvider;
 
 export 'src/panel_api.dart'

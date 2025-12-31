@@ -11,6 +11,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/controller/graph_controller.core.dart' show GraphController;
+import '../domain/graph.dart' show Graph;
 // events
 import '../core/graph_events.dart'
     show
@@ -60,6 +61,7 @@ import 'layers/selection_layer.dart' show SelectionLayer;
 import 'layers/viewer_layer.dart' show ViewerLayer;
 // layers
 import 'layers/wires_layer.dart' show WiresLayer;
+import 'node_drag_wrapper.dart' show dragDeltaNotifier;
 import 'panel_host.dart' show SidePanelHost;
 
 // ---- Parts (shared imports live in this file) -------------------------------

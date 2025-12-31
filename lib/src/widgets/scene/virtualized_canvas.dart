@@ -21,6 +21,7 @@ class _VirtualizedCanvasState extends ConsumerState<VirtualizedCanvas> {
   Widget build(BuildContext context) {
     // The heavy work is done in child layers.
     return Stack(
+      clipBehavior: Clip.none,
       children: [
         const RepaintBoundary(child: NodesLayer()),
         Positioned.fill(
