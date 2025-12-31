@@ -44,6 +44,7 @@ mixin _IOMixin on _GraphCoreBase {
         .toList();
     final d = _activeDoc!;
     d.graph = Graph(nodes: nodes, connections: connections);
+    d._rebuildConnectionIndex();
     // Emit events for full reload
     _hub.fire(GraphCleared());
     _hub.fire(TabGraphCleared(_activeId!));
@@ -115,6 +116,7 @@ mixin _IOMixin on _GraphCoreBase {
         )
         .toList();
     d.graph = Graph(nodes: nodes, connections: connections);
+    d._rebuildConnectionIndex();
 
     // Notify the tab-specific listeners.
     _hub.fire(TabGraphCleared(id));
@@ -135,6 +137,7 @@ mixin _IOMixin on _GraphCoreBase {
     _snapshot();
     final d = _activeDoc!;
     d.graph = gm.clear(d.graph);
+    d._rebuildConnectionIndex();
     _hub.fire(GraphCleared());
     _hub.fire(TabGraphCleared(_activeId!));
     _hub.fire(GraphChanged(d.graph));

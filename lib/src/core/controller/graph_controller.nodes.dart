@@ -68,6 +68,7 @@ mixin _NodesMixin on _GraphCoreBase {
     _snapshot();
     final d = _activeDoc!;
     d.graph = gm.deleteNode(d.graph, id);
+    d._rebuildConnectionIndex();
     _hub.fire(NodeDeleted(id));
     _hub.fire(GraphChanged(d.graph));
     _hub.fire(TabGraphChanged(_activeId!, d.graph));

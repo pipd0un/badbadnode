@@ -42,12 +42,24 @@ class _Doc {
   final Map<String, dynamic> globals;
   bool globalsBootstrapped;
   String title;
+  final Map<String, Connection> connByToPortId = <String, Connection>{};
+  final Map<String, Connection> connById = <String, Connection>{};
 
   _Doc({required this.graph, required this.title})
       : history = GraphHistoryService(),
         globals = <String, dynamic>{},
         globalsBootstrapped = false {
     history.init(graph.nodes, graph.connections);
+    _rebuildConnectionIndex();
+  }
+
+  void _rebuildConnectionIndex() {
+    connByToPortId.clear();
+    connById.clear();
+    for (final c in graph.connections) {
+      connByToPortId[c.toPortId] = c;
+      connById[c.id] = c;
+    }
   }
 }
 
@@ -115,6 +127,7 @@ abstract class _GraphCoreBase {
     final d = _activeDoc;
     if (d == null) return;
     d.graph = Graph(nodes: snap.nodes, connections: snap.connections);
+    d._rebuildConnectionIndex();
     _hub.fire(GraphCleared());
     _hub.fire(TabGraphCleared(_activeId!));
     _hub.fire(GraphChanged(d.graph));

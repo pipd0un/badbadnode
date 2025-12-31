@@ -4,7 +4,6 @@ import 'dart:collection' show Queue;
 
 import 'controller/graph_controller.core.dart';
 import '../models/node.dart';
-import '../models/connection.dart';
 import '../nodes/node_definition.dart' show NodeDefinition, NodeRegistry;
 import '../services/asset_service.dart' show AssetHub, AssetMeta; // panel assets
 import 'package:file_picker/file_picker.dart' show PlatformFile; // normalize for legacy nodes
@@ -334,11 +333,8 @@ class GraphEvaluator {
   /*────────────────────────  input()  ───────────────────────*/
   dynamic input(Node node, String pin) {
     final pid = '${node.id}_in_$pin';
-    final conn = graph.connections.firstWhere(
-      (c) => c.toPortId == pid,
-      orElse: () => const Connection(id: '', fromPortId: '', toPortId: ''),
-    );
-    if (conn.id.isEmpty) return null;
+    final conn = graph.connectionForInput(pid);
+    if (conn == null) return null;
     final srcId  = _nodeIdOfPort(conn.fromPortId);
     final srcPin = conn.fromPortId.substring(conn.fromPortId.lastIndexOf('_') + 1);
     return srcPin == 'item' ? _values['${srcId}_item'] : _values[srcId];

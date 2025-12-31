@@ -77,6 +77,8 @@ mixin _ClipboardMixin on _GraphCoreBase {
         toPortId: c.toPortId.replaceFirst(oldTo, newIds[oldTo]!),
       );
       d.graph = gm.addConnection(d.graph, newConn);
+      d.connByToPortId[newConn.toPortId] = newConn;
+      d.connById[newConn.id] = newConn;
       _hub.fire(ConnectionAdded(newConn.fromPortId, newConn.toPortId));
     }
     _hub.fire(GraphChanged(d.graph));

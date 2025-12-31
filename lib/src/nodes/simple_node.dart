@@ -100,7 +100,8 @@ class InPort extends ConsumerWidget {
         if (dragging != null && dragging != pid) {
           if (occupied) {
             // detach old wire → give it to cursor, DO NOT auto-connect new one
-            final old = ctl.connections.firstWhere((c) => c.toPortId == pid);
+            final old = ctl.connectionForInput(pid);
+            if (old == null) return;
             NodeActions.deleteConnectionForInput(ref, pid);
             NodeActions.setStartPort(ref, old.fromPortId);
             NodeActions.setDragPos(ref, global);
@@ -114,7 +115,8 @@ class InPort extends ConsumerWidget {
 
         // ── CASE 2: click / drag to detach existing wire ────────────
         if (dragging == null && occupied) {
-          final old = ctl.connections.firstWhere((c) => c.toPortId == pid);
+          final old = ctl.connectionForInput(pid);
+          if (old == null) return;
           NodeActions.deleteConnectionForInput(ref, pid);
           NodeActions.setStartPort(ref, old.fromPortId);
           NodeActions.setDragPos(ref, global);
