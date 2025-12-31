@@ -6,12 +6,14 @@ part of 'graph_controller.core.dart';
 
 mixin _IOMixin on _GraphCoreBase {
   Map<String, dynamic> toJson() {
+    final d = _activeDoc;
+    if (d == null) return {'nodes': const [], 'connections': const []};
     return {
-      'nodes': _doc.graph.nodes.values.map((n) => n.toJson()).toList(),
-      'connections': _doc.graph.connections
+      'nodes': d.graph.nodes.values.map((n) => n.toJson()).toList(),
+      'connections': d.graph.connections
           .where((c) =>
-              _doc.graph.nodes.containsKey(_nodeIdFromPort(c.fromPortId)) &&
-              _doc.graph.nodes.containsKey(_nodeIdFromPort(c.toPortId)))
+              d.graph.nodes.containsKey(_nodeIdFromPort(c.fromPortId)) &&
+              d.graph.nodes.containsKey(_nodeIdFromPort(c.toPortId)))
           .map((c) => {
                 'id': c.id,
                 'fromPortId': c.fromPortId,
@@ -22,6 +24,7 @@ mixin _IOMixin on _GraphCoreBase {
   }
 
   void loadJsonMap(Map<String, dynamic> json) {
+    if (!_hasActiveDoc) return;
     _snapshot();
     resetGlobals(); // ensure fresh globals for new graph
     // Rebuild nodes and connections from JSON
@@ -39,18 +42,19 @@ mixin _IOMixin on _GraphCoreBase {
           ),
         )
         .toList();
-    _doc.graph = Graph(nodes: nodes, connections: connections);
+    final d = _activeDoc!;
+    d.graph = Graph(nodes: nodes, connections: connections);
     // Emit events for full reload
     _hub.fire(GraphCleared());
-    _hub.fire(TabGraphCleared(_activeId));
+    _hub.fire(TabGraphCleared(_activeId!));
     for (final n in nodes.values) {
       _hub.fire(NodeAdded(n.id));
     }
     for (final c in connections) {
       _hub.fire(ConnectionAdded(c.fromPortId, c.toPortId));
     }
-    _hub.fire(GraphChanged(_doc.graph));
-    _hub.fire(TabGraphChanged(_activeId, _doc.graph));
+    _hub.fire(GraphChanged(d.graph));
+    _hub.fire(TabGraphChanged(_activeId!, d.graph));
   }
 
   Future<void> loadJsonFromFile() async {
@@ -74,37 +78,66 @@ mixin _IOMixin on _GraphCoreBase {
 
   /// Export the graph JSON for the specified blueprint id, preserving active tab.
   Map<String, dynamic> exportJsonForBlueprint(String id) {
-    final prev = _activeId;
-    if (prev != id) {
-      activateBlueprint(id);
-    }
-    final data = toJson();
-    if (prev != id) {
-      activateBlueprint(prev);
-    }
-    return data;
+    final d = _docs[id];
+    if (d == null) return {'nodes': const [], 'connections': const []};
+    return {
+      'nodes': d.graph.nodes.values.map((n) => n.toJson()).toList(),
+      'connections': d.graph.connections
+          .where((c) =>
+              d.graph.nodes.containsKey(_nodeIdFromPort(c.fromPortId)) &&
+              d.graph.nodes.containsKey(_nodeIdFromPort(c.toPortId)))
+          .map((c) => {
+                'id': c.id,
+                'fromPortId': c.fromPortId,
+                'toPortId': c.toPortId,
+              })
+          .toList(),
+    };
   }
 
   /// Import the provided graph JSON into the specified blueprint id.
   void importJsonIntoBlueprint(String id, Map<String, dynamic> json) {
-    final prev = _activeId;
-    if (prev != id) {
-      activateBlueprint(id);
+    final d = _docs[id];
+    if (d == null) return;
+    // Rebuild nodes and connections from JSON
+    final Map<String, Node> nodes = {};
+    for (final raw in (json['nodes'] as List<dynamic>)) {
+      final node = Node.fromJson(raw as Map<String, dynamic>);
+      nodes[node.id] = node;
     }
-    loadJsonMap(json);
-    if (prev != id) {
-      activateBlueprint(prev);
+    final connections = (json['connections'] as List<dynamic>)
+        .map(
+          (m) => Connection(
+            id: m['id'] as String,
+            fromPortId: m['fromPortId'] as String,
+            toPortId: m['toPortId'] as String,
+          ),
+        )
+        .toList();
+    d.graph = Graph(nodes: nodes, connections: connections);
+
+    // Notify the tab-specific listeners.
+    _hub.fire(TabGraphCleared(id));
+    _hub.fire(TabGraphChanged(id, d.graph));
+
+    // Also refresh legacy listeners only if this tab is active.
+    if (_activeId == id) {
+      resetGlobals(); // keep parity with loadJsonMap behavior on active tab
+      _hub.fire(GraphCleared());
+      _hub.fire(GraphChanged(d.graph));
     }
   }
 
   // ───────────────── Clear All (active tab only) ─────────────────
   void clear() {
+    if (!_hasActiveDoc) return;
     resetGlobals();
     _snapshot();
-    _doc.graph = gm.clear(_doc.graph);
+    final d = _activeDoc!;
+    d.graph = gm.clear(d.graph);
     _hub.fire(GraphCleared());
-    _hub.fire(TabGraphCleared(_activeId));
-    _hub.fire(GraphChanged(_doc.graph));
-    _hub.fire(TabGraphChanged(_activeId, _doc.graph));
+    _hub.fire(TabGraphCleared(_activeId!));
+    _hub.fire(GraphChanged(d.graph));
+    _hub.fire(TabGraphChanged(_activeId!, d.graph));
   }
 }

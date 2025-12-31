@@ -6,6 +6,7 @@ part of 'graph_controller.core.dart';
 
 mixin _NodesMixin on _GraphCoreBase {
   void addNodeOfType(String type, double x, double y) {
+    if (!_hasActiveDoc) return;
     _snapshot();
     final id = _id();
     NodeDefinition? def =
@@ -25,41 +26,50 @@ mixin _NodesMixin on _GraphCoreBase {
         ...def.initialData,
       },
     );
-    _doc.graph = gm.addNode(_doc.graph, node);
+    final d = _activeDoc!;
+    d.graph = gm.addNode(d.graph, node);
     _hub.fire(NodeAdded(id));
-    _hub.fire(GraphChanged(_doc.graph));
-    _hub.fire(TabGraphChanged(_activeId, _doc.graph));
+    _hub.fire(GraphChanged(d.graph));
+    _hub.fire(TabGraphChanged(_activeId!, d.graph));
   }
 
   void moveNode(String id, double dx, double dy) {
-    _doc.graph = gm.moveNode(_doc.graph, id, dx, dy);
+    final d = _activeDoc;
+    if (d == null) return;
+    d.graph = gm.moveNode(d.graph, id, dx, dy);
     _hub.fire(NodeMoved(id, dx, dy));
-    _hub.fire(GraphChanged(_doc.graph));
-    _hub.fire(TabGraphChanged(_activeId, _doc.graph));
+    _hub.fire(GraphChanged(d.graph));
+    _hub.fire(TabGraphChanged(_activeId!, d.graph));
   }
 
   void snapNodeToGrid(String id) {
+    if (!_hasActiveDoc) return;
     _snapshot();
-    _doc.graph = gm.snapNode(_doc.graph, id);
+    final d = _activeDoc!;
+    d.graph = gm.snapNode(d.graph, id);
     _hub.fire(NodeMoved(id, 0, 0));
-    _hub.fire(GraphChanged(_doc.graph));
-    _hub.fire(TabGraphChanged(_activeId, _doc.graph));
+    _hub.fire(GraphChanged(d.graph));
+    _hub.fire(TabGraphChanged(_activeId!, d.graph));
   }
 
   void updateNodeData(String id, String key, dynamic value) {
+    if (!_hasActiveDoc) return;
     _snapshot();
-    _doc.graph = gm.updateNodeData(_doc.graph, id, key, value);
+    final d = _activeDoc!;
+    d.graph = gm.updateNodeData(d.graph, id, key, value);
     _hub.fire(NodeDataChanged(id));
-    _hub.fire(GraphChanged(_doc.graph));
-    _hub.fire(TabGraphChanged(_activeId, _doc.graph));
+    _hub.fire(GraphChanged(d.graph));
+    _hub.fire(TabGraphChanged(_activeId!, d.graph));
   }
 
   @override
   void deleteNode(String id) {
+    if (!_hasActiveDoc) return;
     _snapshot();
-    _doc.graph = gm.deleteNode(_doc.graph, id);
+    final d = _activeDoc!;
+    d.graph = gm.deleteNode(d.graph, id);
     _hub.fire(NodeDeleted(id));
-    _hub.fire(GraphChanged(_doc.graph));
-    _hub.fire(TabGraphChanged(_activeId, _doc.graph));
+    _hub.fire(GraphChanged(d.graph));
+    _hub.fire(TabGraphChanged(_activeId!, d.graph));
   }
 }

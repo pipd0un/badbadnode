@@ -9,7 +9,7 @@ mixin _TabsMixin on _GraphCoreBase {
         for (final e in _docs.entries)
           BlueprintTabInfo(id: e.key, title: e.value.title),
       ];
-  String get activeBlueprintId => _activeId;
+  String get activeBlueprintId => _activeId ?? '';
 
   /// Lookup the Graph for a specific blueprint id.
   Graph graphOf(String id) => _docs[id]?.graph ?? Graph.empty();
@@ -34,22 +34,17 @@ mixin _TabsMixin on _GraphCoreBase {
     _docs.remove(id);
     _hub.fire(BlueprintClosed(id));
     if (_docs.isEmpty) {
-      // Always keep one tab around.
-      final nid = _openNewBlueprintInternal(
-        title: 'Blueprint ${++_bpCounter}',
-        makeActive: true,
-        fireEvents: true,
-      );
-      // ensure listeners see an initial state for the new tab
-      _hub.fire(TabGraphChanged(nid, _docs[nid]!.graph));
-      _hub.fire(GraphChanged(_docs[nid]!.graph)); // legacy
+      _activeId = null;
+      // Allow a completely empty workspace (no auto-tab).
+      _hub.fire(ActiveBlueprintChanged(''));
+      _hub.fire(GraphChanged(Graph.empty())); // legacy listeners
       return;
     }
     if (wasActive) {
       _activeId = _docs.keys.first;
       // Do not fire GraphChanged here – switching tabs shouldn’t rebuild
       // graph-bound widgets unless the graph itself changed.
-      _hub.fire(ActiveBlueprintChanged(_activeId));
+      _hub.fire(ActiveBlueprintChanged(_activeId!));
     }
   }
 
@@ -75,14 +70,18 @@ mixin _TabsMixin on _GraphCoreBase {
     required bool fireEvents,
   }) {
     final id = _id();
-    _docs[id] = _Doc(graph: Graph.empty(), title: title);
+    final doc = _Doc(graph: Graph.empty(), title: title);
+    // Seed globals when starting from an empty workspace.
+    doc.globals.addAll(_seedGlobals);
+    doc.globalsBootstrapped = _seedGlobalsBootstrapped;
+    _docs[id] = doc;
     if (makeActive) _activeId = id;
     if (fireEvents) {
       _hub.fire(BlueprintOpened(id, title));
-      if (makeActive) _hub.fire(ActiveBlueprintChanged(_activeId));
+      if (makeActive) _hub.fire(ActiveBlueprintChanged(_activeId!));
       // prime stacked canvases for this tab
       _hub.fire(TabGraphChanged(id, _docs[id]!.graph));
-      if (makeActive) _hub.fire(GraphChanged(_doc.graph)); // legacy
+      if (makeActive) _hub.fire(GraphChanged(_docs[id]!.graph)); // legacy
     }
     return id;
   }

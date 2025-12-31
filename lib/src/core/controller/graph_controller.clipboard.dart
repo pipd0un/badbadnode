@@ -10,15 +10,17 @@ mixin _ClipboardMixin on _GraphCoreBase {
 
   void copyNodes(Iterable<String> ids) {
     if (ids.isEmpty) return;
+    final d = _activeDoc;
+    if (d == null) return;
     _clipNodes = [
       for (final id in ids)
         Node(
           id: id,
-          type: _doc.graph.nodes[id]!.type,
-          data: Map<String, dynamic>.from(_doc.graph.nodes[id]!.data),
+          type: d.graph.nodes[id]!.type,
+          data: Map<String, dynamic>.from(d.graph.nodes[id]!.data),
         ),
     ];
-    _clipConns = _doc.graph.connections.where((c) {
+    _clipConns = d.graph.connections.where((c) {
       final fromNode = _nodeIdFromPort(c.fromPortId);
       final toNode = _nodeIdFromPort(c.toPortId);
       return ids.contains(fromNode) && ids.contains(toNode);
@@ -27,6 +29,7 @@ mixin _ClipboardMixin on _GraphCoreBase {
 
   void cutNodes(Iterable<String> ids) {
     if (ids.isEmpty) return;
+    if (!_hasActiveDoc) return;
     _snapshot();
     copyNodes(ids);
     for (final id in ids) {
@@ -36,6 +39,7 @@ mixin _ClipboardMixin on _GraphCoreBase {
 
   void pasteClipboard(double dstX, double dstY) {
     if (_clipNodes == null || _clipNodes!.isEmpty) return;
+    if (!_hasActiveDoc) return;
     _snapshot();
     // Calculate offset to paste near cursor
     final minX =
@@ -46,6 +50,7 @@ mixin _ClipboardMixin on _GraphCoreBase {
     final dy = dstY - minY;
 
     final newIds = <String, String>{};
+    final d = _activeDoc!;
     for (final orig in _clipNodes!) {
       final nid = _id();
       newIds[orig.id] = nid;
@@ -58,7 +63,7 @@ mixin _ClipboardMixin on _GraphCoreBase {
           'y': (orig.data['y'] as num).toDouble() + dy,
         },
       );
-      _doc.graph = gm.addNode(_doc.graph, newNode);
+      d.graph = gm.addNode(d.graph, newNode);
       _hub.fire(NodeAdded(nid));
     }
     // Recreate connections between pasted nodes
@@ -71,10 +76,10 @@ mixin _ClipboardMixin on _GraphCoreBase {
         fromPortId: c.fromPortId.replaceFirst(oldFrom, newIds[oldFrom]!),
         toPortId: c.toPortId.replaceFirst(oldTo, newIds[oldTo]!),
       );
-      _doc.graph = gm.addConnection(_doc.graph, newConn);
+      d.graph = gm.addConnection(d.graph, newConn);
       _hub.fire(ConnectionAdded(newConn.fromPortId, newConn.toPortId));
     }
-    _hub.fire(GraphChanged(_doc.graph));
-    _hub.fire(TabGraphChanged(_activeId, _doc.graph));
+    _hub.fire(GraphChanged(d.graph));
+    _hub.fire(TabGraphChanged(_activeId!, d.graph));
   }
 }

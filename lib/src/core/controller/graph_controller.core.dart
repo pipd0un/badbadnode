@@ -65,10 +65,16 @@ abstract class _GraphCoreBase {
   final MessageHub _hub = MessageHub();
 
   final Map<String, _Doc> _docs = {};
-  String _activeId = '';
-  int _bpCounter = 1; // for default names
+  String? _activeId;
+  int _bpCounter = 0; // for default names
 
-  _Doc get _doc => _docs[_activeId]!;
+  _Doc? get _activeDoc =>
+      _activeId != null ? _docs[_activeId!] : null;
+  bool get _hasActiveDoc => _activeDoc != null;
+
+  /// Seed globals used when no tab is active and copied into newly created tabs.
+  final Map<String, dynamic> _seedGlobals = <String, dynamic>{};
+  bool _seedGlobalsBootstrapped = false;
 
   // ───────────────── event stream ─────────────────
   Stream<T> on<T>() => _hub.on<T>();
@@ -83,19 +89,26 @@ abstract class _GraphCoreBase {
   }
 
   // ───────────────── active graph shortcuts ─────────────────
-  Graph get graph => _doc.graph;
-  Map<String, Node> get nodes => _doc.graph.nodes;
-  List<Connection> get connections => _doc.graph.connections;
+  Graph get graph => _activeDoc?.graph ?? Graph.empty();
+  Map<String, Node> get nodes => _activeDoc?.graph.nodes ?? const <String, Node>{};
+  List<Connection> get connections =>
+      _activeDoc?.graph.connections ?? const <Connection>[];
 
   // ───────────────── history helpers (used across mixins) ─────────────────
-  void _snapshot() => _doc.history.push(_doc.graph.nodes, _doc.graph.connections);
+  void _snapshot() {
+    final d = _activeDoc;
+    if (d == null) return;
+    d.history.push(d.graph.nodes, d.graph.connections);
+  }
 
   void _restoreSnapshot(GraphSnapshot snap) {
-    _doc.graph = Graph(nodes: snap.nodes, connections: snap.connections);
+    final d = _activeDoc;
+    if (d == null) return;
+    d.graph = Graph(nodes: snap.nodes, connections: snap.connections);
     _hub.fire(GraphCleared());
-    _hub.fire(TabGraphCleared(_activeId));
-    _hub.fire(GraphChanged(_doc.graph));
-    _hub.fire(TabGraphChanged(_activeId, _doc.graph));
+    _hub.fire(TabGraphCleared(_activeId!));
+    _hub.fire(GraphChanged(d.graph));
+    _hub.fire(TabGraphChanged(_activeId!, d.graph));
   }
 
   // Cross-mixin contracts
@@ -117,17 +130,6 @@ class GraphController extends _GraphCoreBase
   // ───────────────── singleton ─────────────────
   GraphController._internal() {
     registerBuiltInNodes();
-    // create first blank blueprint
-    _openNewBlueprintInternal(
-      title: 'Blueprint 1',
-      makeActive: true,
-      fireEvents: false,
-    );
-    // announce initial states to any stacked canvases
-    _hub.fire(BlueprintOpened(_activeId, _docs[_activeId]!.title));
-    _hub.fire(ActiveBlueprintChanged(_activeId));
-    _hub.fire(TabGraphChanged(_activeId, _docs[_activeId]!.graph));
-    _hub.fire(GraphChanged(_docs[_activeId]!.graph)); // legacy listeners
   }
   static final GraphController _inst = GraphController._internal();
   factory GraphController() => _inst;

@@ -158,6 +158,7 @@ class _HostState extends ConsumerState<Host> {
   /// Sanitize stored port positions for [tabId] against the tab's current graph,
   /// then request a re-measure of surviving ports.
   void _sanitizePortsForTab(String tabId) {
+    if (tabId.isEmpty) return;
     final c = _ensureContainer(tabId);
     // Read the per-tab graph from its own container scope.
     final graph = c.read(graphProvider);
@@ -172,7 +173,8 @@ class _HostState extends ConsumerState<Host> {
   }
 
   void _updateActiveContainerLink(String id) {
-    ActiveCanvasContainerLink.instance.container = _ensureContainer(id);
+    ActiveCanvasContainerLink.instance.container =
+        id.isEmpty ? null : _ensureContainer(id);
   }
 
   List<PlatformFile> _platformAssetsFromHub() => [
@@ -197,22 +199,27 @@ class _HostState extends ConsumerState<Host> {
     // ⬇ Attach graph to the PageEmbedder so page API can open tabs at runtime.
     PageEmbedder.instance.attachGraph(_graph);
 
-    // Seed first tab’s container + state
+    // Seed first tab’s container + state (if any).
     final active = _graph.activeBlueprintId;
-    _ticks[active] = 0;
-    _layoutDirty[active] = false;
-    _ensureContainer(active);
-    _ensureRepaint(active);
-    _updateActiveContainerLink(active); // <<< bridge: expose active canvas container
+    if (active.isNotEmpty) {
+      _ticks[active] = 0;
+      _layoutDirty[active] = false;
+      _ensureContainer(active);
+      _ensureRepaint(active);
+      _updateActiveContainerLink(active); // <<< bridge: expose active canvas container
 
-    // Normalize port positions so wires attach without waiting for
-    // the first manual drag.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final activeId = _graph.activeBlueprintId;
-      _sanitizePortsForTab(activeId);
-      _bumpTick(activeId);
-    });
+      // Normalize port positions so wires attach without waiting for
+      // the first manual drag.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final activeId = _graph.activeBlueprintId;
+        if (activeId.isEmpty) return;
+        _sanitizePortsForTab(activeId);
+        _bumpTick(activeId);
+      });
+    } else {
+      _updateActiveContainerLink(''); // keep bridge null until a tab exists
+    }
 
     _subs = [
       // ⬇ Keep GraphController.globals["assets"] in sync with panel assets.
@@ -222,6 +229,11 @@ class _HostState extends ConsumerState<Host> {
       }),
 
       _graph.on<ActiveBlueprintChanged>().listen((e) {
+        if (e.id.isEmpty) {
+          _updateActiveContainerLink('');
+          if (mounted) setState(() {});
+          return;
+        }
         // Ensure a repaint for ProbePaintOnce on the activated tab.
         _ensureRepaint(e.id).value++;
 
@@ -321,9 +333,9 @@ class _HostState extends ConsumerState<Host> {
   Widget build(BuildContext context) {
     final tabs = _graph.tabs;
     final activeId = _graph.activeBlueprintId;
-    final activeIndex = tabs
-        .indexWhere((t) => t.id == activeId)
-        .clamp(0, tabs.length - 1);
+    final activeIndex = tabs.isEmpty
+        ? 0
+        : tabs.indexWhere((t) => t.id == activeId).clamp(0, tabs.length - 1);
 
     final children = <Widget>[];
     for (var i = 0; i < tabs.length; i++) {
@@ -351,7 +363,9 @@ class _HostState extends ConsumerState<Host> {
       );
     }
 
-    final stack = IndexedStack(index: activeIndex, children: children);
+    final Widget stack = tabs.isEmpty
+        ? const ColoredBox(color: Color.fromARGB(255, 20, 20, 20))
+        : IndexedStack(index: activeIndex, children: children);
     final showPanel = ref.watch(sidePanelVisibleProvider);
     final panelWidth = ref.watch(sidePanelWidthProvider);
 
