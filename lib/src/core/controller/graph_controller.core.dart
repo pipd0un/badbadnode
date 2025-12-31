@@ -73,7 +73,7 @@ class _Doc {
       ..clear()
       ..addAll(graph.nodes);
     connsById
-      ..clear();
+      .clear();
     for (final c in graph.connections) {
       connsById[c.id] = c;
     }
