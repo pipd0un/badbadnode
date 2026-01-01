@@ -161,11 +161,13 @@ abstract class _GraphCoreBase {
   // ───────────────── id/helpers ─────────────────
   static final Random _rng = Random();
   static int _seq = 0;
+  static const int _u32MaxExclusive = 0x100000000; // 2^32
 
   String _id() {
     final now = DateTime.now().microsecondsSinceEpoch;
     final seq = (_seq = (_seq + 1) & 0xFFFFF);
-    final rand = _rng.nextInt(1 << 32);
+    // NOTE(web): avoid `1 << 32` which can evaluate to 0 in JS runtimes.
+    final rand = _rng.nextInt(_u32MaxExclusive);
     return '${now.toRadixString(36)}_${seq.toRadixString(36)}_${rand.toRadixString(36)}';
   }
 
